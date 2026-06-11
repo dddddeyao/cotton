@@ -1,0 +1,12 @@
+* text=auto
+
+*.java text diff=java
+*.py text diff=python
+*.ts text diff=typescript
+*.tsx text diff=typescript
+*.json text
+*.yml text
+*.yaml text
+*.xml text
+*.properties text
+*.md text
