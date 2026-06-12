@@ -1,0 +1,6 @@
+target/
+.idea/
+.vscode/
+uploads/
+*.log
+test.jpg

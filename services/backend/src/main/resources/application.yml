@@ -1,0 +1,35 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/cotton_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
+    show-sql: ${SPRING_JPA_SHOW_SQL:false}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: ${SPRING_JPA_FORMAT_SQL:true}
+  servlet:
+    multipart:
+      max-file-size: ${SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE:10MB}
+      max-request-size: ${SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE:10MB}
+
+# JWT 配置
+jwt:
+  secret: ${JWT_SECRET:Y29udG9uLXJlY29nbml0aW9uLWFzc2lzdGFudC1zZWNyZXQta2V5LWZvci1wcm9kdWN0aW9uLTIwMjY=}
+  expiration: ${JWT_EXPIRATION:604800000}  # 7 天 (毫秒)
+
+# Flask 推理服务地址
+python:
+  service:
+    url: ${PYTHON_SERVICE_URL:http://127.0.0.1:5000}
+
+app:
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:*}

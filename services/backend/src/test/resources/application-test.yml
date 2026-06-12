@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:cotton_test;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+jwt:
+  secret: Y29udG9uLXJlY29nbml0aW9uLWFzc2lzdGFudC1zZWNyZXQta2V5LWZvci1wcm9kdWN0aW9uLTIwMjY=
+  expiration: 604800000
+
+python:
+  service:
+    url: http://127.0.0.1:5000

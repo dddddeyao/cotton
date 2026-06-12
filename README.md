@@ -1,72 +1,124 @@
-# 棉花识别助手 Android 前端项目
+# 棉花识别助手
 
-本目录用于开发“棉花识别助手”安卓 App 前端。
+棉花识别助手是一个包含 Android App、Web 管理/演示端和后端识别服务的项目。当前仓库按 monorepo 方式组织，前端应用放在 `apps/`，后端服务放在 `services/`，共享素材和项目文档分别放在 `assets/`、`docs/`。
 
-当前阶段：Expo 前端骨架已初始化，首版可交互页面开发中。
-
-## 目录说明
+## 目录结构
 
 ```text
 cotton-recognition-assistant/
-  app/                  # React Native / Expo / TypeScript 工程
+  apps/
+    android/                 # React Native / Expo Android 前端
+    web/                     # React + Vite Web 前端
+  services/
+    backend/                 # Spring Boot 后端，内含 Python 模型推理服务
+      model-service-python/  # Flask / PyTorch 推理服务与模型资源
+      src/                   # Spring Boot 源码
   assets/
-    icons/              # App 图标、启动页图标
-    references/         # 鸿蒙端截图、设计参考图
-    standards/          # 分类标准图片、表格、资料
+    icons/                   # App 图标、启动页图标
+    references/              # 鸿蒙端截图、设计参考图
+    standards/               # 分类标准图片、表格、资料
   docs/
-    requirements.md     # 前端需求文档
-    pending-questions.md # 待确认问题清单
+    requirements.md          # Android 端需求文档
+    pending-questions.md     # 待确认问题清单
 ```
 
-## 推荐技术栈
+## 子项目
 
-```text
-React Native + Expo + TypeScript
-```
-
-## 当前已完成
-
-- `app/` 已初始化为 Expo + TypeScript 工程。
-- 已搭建四个底部 Tab：前沿瞭望 / 分类标准 / 智能识别 / 我的信息。
-- 已实现 mock 新闻列表、搜索、本地缓存占位。
-- 已实现分类标准长页，包含颜色分级说明、图表占位、颜色等级表、杂质等级表。
-- 已实现拍照、相册选图、图片预览、mock 识别结果、识别记录、全选删除 UI。
-- 已实现登录 / 注册 mock 流程、编辑资料、我的收藏、应用设置、用户协议、隐私政策占位页。
-- 已补充统一接口配置、请求封装、图片上传 FormData、识别结果字段适配器。
-- 已复制鸿蒙端截图到 `assets/references/` 作为视觉参考。
+| 子项目 | 路径 | 技术栈 | 说明 |
+| --- | --- | --- | --- |
+| Android 前端 | `apps/android` | Expo + React Native + TypeScript | 面向 APK 交付，包含新闻、分类标准、智能识别、我的信息 |
+| Web 前端 | `apps/web` | React + TypeScript + Vite | 面向浏览器演示与管理，支持 mock 兜底和后端接口接入 |
+| 后端服务 | `services/backend` | Spring Boot + MySQL + JWT | 提供认证、新闻、识别上传、识别历史等接口 |
+| 模型服务 | `services/backend/model-service-python` | Flask + PyTorch | 由后端调用的棉花图像推理服务 |
 
 ## 本地运行
 
-```text
-cd app
+Android 前端：
+
+```bash
+cd apps/android
 npm install
 npm run start
 ```
 
-打开 Expo Dev Tools 后，可使用 Android 模拟器或 Expo Go 扫码预览。
+Web 前端：
+
+```bash
+cd apps/web
+npm install
+npm run dev
+```
+
+后端 Spring Boot：
+
+```bash
+cd services/backend
+./mvnw spring-boot:run
+```
+
+Windows PowerShell 可使用：
+
+```bash
+cd services/backend
+.\mvnw.cmd spring-boot:run
+```
+
+Python 模型服务：
+
+```bash
+cd services/backend/model-service-python
+python model_service2.py
+```
+
+## 接口配置
+
+- Android 默认后端地址在 `apps/android/src/config.ts`。
+- Web 可复制 `apps/web/.env.example` 为 `apps/web/.env.local` 并配置 `VITE_API_BASE_URL`。
+- Spring Boot 默认端口为 `8080`，Python Flask 推理服务默认端口为 `5000`。
 
 ## 编译检查
 
-```text
-cd app
-npm run typecheck
+```bash
+cd apps/android && npm run typecheck
+cd apps/web && npm run build
+cd services/backend && ./mvnw test
 ```
+
+## 部署
+
+仓库已提供单机 Docker Compose 部署配置：
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+默认部署后只暴露 Web/Nginx，浏览器访问：
+
+```text
+http://服务器IP/
+```
+
+后端 API 通过同域 `/api` 转发，例如：
+
+```text
+http://服务器IP/api/health
+```
+
+详细步骤见 `docs/deployment.md`。
 
 ## 当前核心结论
 
 - App 名称：棉花识别助手
-- 目标平台：Android
-- 最终交付：可直接安装的 APK
+- 目标平台：Android、Web
 - 页面结构：前沿瞭望 / 分类标准 / 智能识别 / 我的信息
-- 登录方式：账号密码
-- 分类标准：前端写死，复刻鸿蒙端
-- 新闻：优先缓存展示，后端刷新，不建议前端实时爬取
-- 智能识别：拍照或相册选择图片，调用后端接口识别
+- 登录方式：账号密码 + JWT
+- 分类标准：前端结构化写死，可离线查看
+- 新闻：优先缓存展示，后端刷新，前端保留 mock 兜底
+- 智能识别：拍照或相册选择图片，上传后由后端转发模型服务识别
 
-## 下一步
+## 维护约定
 
-1. 补齐 `docs/pending-questions.md` 中的后端接口信息。
-2. 收集 App 图标、分类标准原始资料、正式新闻图片素材。
-3. 在 `app/src/config.ts` 配置后端地址、识别上传字段名和接口路径。
-4. 按真实返回字段微调 `app/src/services/normalizers.ts`。
-5. 接入真实 APK 打包配置与测试账号说明。
+- 应用代码只放在 `apps/` 和 `services/`。
+- 构建产物、依赖目录、IDE 配置、上传文件和模型权重不提交到 Git。
+- 大模型文件保留在本地或单独交付，仓库只维护代码、配置模板和运行说明。

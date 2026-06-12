@@ -16,7 +16,7 @@ React Native + Expo + TypeScript
 
 ```text
 Android APK
-前端项目源码
+Android 前端项目源码：apps/android
 运行说明
 接口配置说明
 APK 打包说明
@@ -308,4 +308,15 @@ APK 打包说明
 ```text
 Markdown 文档
 Word 文档内容
+```
+
+## 11. 当前仓库位置
+
+```text
+Android 前端：apps/android
+Web 前端：apps/web
+后端服务：services/backend
+Python 模型服务：services/backend/model-service-python
+共享素材：assets
+项目文档：docs
 ```

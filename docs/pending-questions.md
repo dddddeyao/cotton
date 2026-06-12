@@ -3,21 +3,21 @@
 ## 后端基础信息
 
 ```text
-1. 后端技术栈是什么？
+1. 后端技术栈是什么？已确认：Spring Boot 3.1 + MySQL + JWT；模型服务为 Flask + PyTorch。
 2. 是否有 Swagger、Apifox、Postman 或接口文档？
-3. 后端项目路径在哪里？
-4. 后端基础地址是什么？
+3. 后端项目路径在哪里？已确认：services/backend。
+4. 后端基础地址是什么？本地默认：http://localhost:8080。
 ```
 
 ## 登录与账号
 
 ```text
 5. 登录 token 字段名是什么？
-6. token 是否放在 Authorization 请求头？
+6. token 是否放在 Authorization 请求头？前端当前按 Authorization: Bearer <token> 处理。
 7. token 过期后前端应该重新登录还是刷新 token？
 8. 注册接口字段是否只有 username/password，还是还有其他字段？
-9. 修改密码接口是否完成？
-9.1. 是否提供退出登录接口？若提供，路径是否为 POST /auth/logout？
+9. 修改密码接口是否完成？当前前后端均预留 POST /auth/change-password。
+9.1. 是否提供退出登录接口？当前前后端均预留 POST /auth/logout。
 ```
 
 ## 新闻模块
@@ -32,8 +32,8 @@
 ## 智能识别模块
 
 ```text
-14. 智能识别接口上传字段名是什么？file / image / photo？
-15. 智能识别是否只传图片？
+14. 智能识别接口上传字段名是什么？当前前端和模型服务均按 file 处理。
+15. 智能识别是否只传图片？当前实现按单图片上传处理。
 16. 智能识别返回结果字段有哪些？
 17. 识别成功后是否必须跳转结果详情页？
 18. 识别失败提示文案是什么？
