@@ -1,9 +1,11 @@
 import { appConfig } from '../config';
 import { createMockRecognitionResult, mockNews } from '../data/mockData';
-import { NewsItem, RecognitionResult, UserSession } from '../types';
-import { ApiUnavailableError, requestJson } from './http';
+import { cache } from '../storage/cache';
+import { NewsItem, RecognitionResult, UserProfile, UserSession } from '../types';
+import { ApiNetworkError, ApiUnavailableError, requestJson } from './http';
 import {
   normalizeNewsList,
+  normalizeProfile,
   normalizeRecognitionHistory,
   normalizeRecognitionResult,
   normalizeSession,
@@ -16,7 +18,8 @@ type UploadFile = {
 };
 
 function shouldUseMock(error: unknown) {
-  return appConfig.mockWhenApiUnavailable && (!appConfig.apiBaseUrl || error instanceof ApiUnavailableError);
+  return appConfig.mockWhenApiUnavailable
+    && (!appConfig.apiBaseUrl || error instanceof ApiUnavailableError || error instanceof ApiNetworkError);
 }
 
 function getFileNameFromUri(uri: string) {
@@ -52,6 +55,19 @@ function createImageFormData(imageUri: string) {
   return formData;
 }
 
+function createLocalProfile(
+  username: string,
+  profile: Partial<Omit<UserProfile, 'username'>> = {}
+): UserProfile {
+  return {
+    username,
+    nickname: profile.nickname || '',
+    phone: profile.phone || '',
+    organization: profile.organization || '',
+    role: profile.role || '研究人员',
+  };
+}
+
 export const api = {
   async fetchNews(): Promise<NewsItem[]> {
     try {
@@ -59,7 +75,7 @@ export const api = {
       const normalized = normalizeNewsList(payload);
       return normalized.length > 0 ? normalized : mockNews;
     } catch (error) {
-      if (appConfig.mockWhenApiUnavailable) {
+      if (shouldUseMock(error)) {
         return mockNews;
       }
 
@@ -108,9 +124,13 @@ export const api = {
       });
       const session = normalizeSession(payload, username);
 
+      if (!session.token) {
+        throw new Error('注册接口未返回 token');
+      }
+
       return {
         username: session.username || username,
-        token: session.token || `registered-${Date.now()}`,
+        token: session.token,
       };
     } catch (error) {
       if (shouldUseMock(error)) {
@@ -143,6 +163,70 @@ export const api = {
     }
   },
 
+  async changePassword(oldPassword: string, newPassword: string, token: string): Promise<void> {
+    try {
+      await requestJson(appConfig.endpoints.changePassword, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ oldPassword, newPassword }),
+      });
+    } catch (error) {
+      if (shouldUseMock(error)) {
+        return;
+      }
+
+      throw error;
+    }
+  },
+
+  async fetchProfile(session: UserSession): Promise<UserProfile> {
+    try {
+      const payload = await requestJson<unknown>(appConfig.endpoints.userProfile, {
+        token: session.token,
+      });
+      const profile = normalizeProfile(payload, session.username);
+      await cache.setProfile(session.username, {
+        nickname: profile.nickname,
+        phone: profile.phone,
+        organization: profile.organization,
+        role: profile.role,
+      });
+      return profile;
+    } catch (error) {
+      if (shouldUseMock(error)) {
+        const cachedProfile = await cache.getProfile(session.username);
+        return createLocalProfile(session.username, cachedProfile ?? {});
+      }
+
+      throw error;
+    }
+  },
+
+  async updateProfile(session: UserSession, profile: Omit<UserProfile, 'username'>): Promise<UserProfile> {
+    try {
+      const payload = await requestJson<unknown>(appConfig.endpoints.userProfile, {
+        method: 'PUT',
+        token: session.token,
+        body: JSON.stringify(profile),
+      });
+      const savedProfile = normalizeProfile(payload, session.username);
+      await cache.setProfile(session.username, {
+        nickname: savedProfile.nickname,
+        phone: savedProfile.phone,
+        organization: savedProfile.organization,
+        role: savedProfile.role,
+      });
+      return savedProfile;
+    } catch (error) {
+      if (shouldUseMock(error)) {
+        await cache.setProfile(session.username, profile);
+        return createLocalProfile(session.username, profile);
+      }
+
+      throw error;
+    }
+  },
+
   async recognizeImage(imageUri: string, token?: string): Promise<RecognitionResult> {
     if (!imageUri) {
       throw new Error('请先选择图片');
@@ -167,8 +251,16 @@ export const api = {
   },
 
   async fetchHistory(token: string): Promise<RecognitionResult[]> {
-    const payload = await requestJson<unknown>(appConfig.endpoints.recognitionHistory, { token });
-    return normalizeRecognitionHistory(payload);
+    try {
+      const payload = await requestJson<unknown>(appConfig.endpoints.recognitionHistory, { token });
+      return normalizeRecognitionHistory(payload);
+    } catch (error) {
+      if (shouldUseMock(error)) {
+        return [];
+      }
+
+      throw error;
+    }
   },
 
   async deleteHistory(ids: string[], token: string): Promise<void> {
@@ -176,10 +268,22 @@ export const api = {
       .map((id) => Number(id))
       .filter((id) => Number.isFinite(id));
 
-    await requestJson(appConfig.endpoints.recognitionHistory, {
-      method: 'DELETE',
-      token,
-      body: JSON.stringify({ ids: normalizedIds }),
-    });
+    if (normalizedIds.length === 0) {
+      return;
+    }
+
+    try {
+      await requestJson(appConfig.endpoints.recognitionHistory, {
+        method: 'DELETE',
+        token,
+        body: JSON.stringify({ ids: normalizedIds }),
+      });
+    } catch (error) {
+      if (shouldUseMock(error)) {
+        return;
+      }
+
+      throw error;
+    }
   },
 };

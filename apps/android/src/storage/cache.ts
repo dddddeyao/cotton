@@ -1,11 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { NewsItem, RecognitionResult, UserSession } from '../types';
+import { NewsItem, RecognitionResult, UserProfile, UserSession } from '../types';
+
+type ProfileCache = Omit<UserProfile, 'username'>;
 
 const keys = {
   news: 'cotton.news.cache',
   history: 'cotton.recognition.history',
   session: 'cotton.user.session',
+  profile: (username: string) => `cotton.user.profile.${username}`,
 };
 
 async function readJson<T>(key: string, fallback: T): Promise<T> {
@@ -28,6 +31,8 @@ export const cache = {
   setHistory: (items: RecognitionResult[]) => writeJson(keys.history, items),
   getSession: () => readJson<UserSession | null>(keys.session, null),
   setSession: (session: UserSession) => writeJson(keys.session, session),
+  getProfile: (username: string) => readJson<ProfileCache | null>(keys.profile(username), null),
+  setProfile: (username: string, profile: ProfileCache) => writeJson(keys.profile(username), profile),
   clearSession: () => AsyncStorage.removeItem(keys.session),
   clearNews: () => AsyncStorage.removeItem(keys.news),
   clearHistory: () => AsyncStorage.removeItem(keys.history),

@@ -22,6 +22,10 @@ public class RecognitionResult {
     private Float confidence;   // 可由 detectionResult.confidence 回填
 
     // 通用
+    private Long id;
+    private String imageUri;
+    private LocalDateTime createdAt;
+    private String conclusion;
     private String errorMessage;
     private LocalDateTime timestamp;
     private String filename;
@@ -63,6 +67,18 @@ public class RecognitionResult {
     public void setConfidence(Float confidence) { this.confidence = confidence; }
     public void setConfidence(double confidence) { this.confidence = (float) confidence; }
 
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+
+    public String getImageUri() { return imageUri; }
+    public void setImageUri(String imageUri) { this.imageUri = imageUri; }
+
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public String getConclusion() { return conclusion; }
+    public void setConclusion(String conclusion) { this.conclusion = conclusion; }
+
     public String getErrorMessage() { return errorMessage; }
     public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
 
@@ -78,6 +94,7 @@ public class RecognitionResult {
                 "cottonAreaImage(len)=" + (cottonAreaImage == null ? 0 : cottonAreaImage.length()) +
                 ", impurityAreaImage(len)=" + (impurityAreaImage == null ? 0 : impurityAreaImage.length()) +
                 ", detectionResult=" + (detectionResult == null ? null : detectionResult.getColorGrade()) +
+                ", id=" + id +
                 ", label='" + label + '\'' +
                 ", confidence=" + confidence +
                 ", errorMessage='" + errorMessage + '\'' +

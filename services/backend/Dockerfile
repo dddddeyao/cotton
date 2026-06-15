@@ -16,6 +16,8 @@ WORKDIR /app
 
 ENV SERVER_PORT=8080
 
+RUN apk add --no-cache wget
+
 COPY --from=build /workspace/target/*.jar app.jar
 
 EXPOSE 8080

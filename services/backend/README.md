@@ -38,7 +38,11 @@ SPRING_DATASOURCE_PASSWORD
 JWT_SECRET
 JWT_EXPIRATION
 PYTHON_SERVICE_URL
+PYTHON_SERVICE_CONNECT_TIMEOUT_MS
+PYTHON_SERVICE_READ_TIMEOUT_MS
+APP_UPLOAD_DIR
 APP_CORS_ALLOWED_ORIGINS
+APP_CORS_ALLOW_CREDENTIALS
 ```
 
 ## 运行
@@ -74,9 +78,15 @@ cd services/backend
 - `GET /news`
 - `POST /recognition`
 - `GET /recognition/history`
-- `DELETE /recognition/history/{id}`
+- `DELETE /recognition/history`
+- `GET /uploads/{filename}`
+- `GET /user/profile`
+- `PUT /user/profile`
+- `GET /health`
 
 ## 注意事项
 
+- 识别上传图片会保存到 `APP_UPLOAD_DIR`，默认本地目录为 `uploads/`；Docker 部署时挂载到 `/app/uploads`。
+- 识别记录中的 `imageUri` 会返回 `/uploads/{filename}`，Web/Nginx 部署下前端会通过 `/api/uploads/{filename}` 访问。
 - `target/`、`.idea/`、`uploads/` 为本地构建或运行产物，不应提交。
 - `*.pth` 模型权重文件体积较大，不应提交到 Git，可通过本地文件、对象存储或发布包单独交付。

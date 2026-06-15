@@ -53,6 +53,11 @@ export function ProfileScreen({
     setMessage('');
     const normalizedUsername = username.trim();
 
+    if (!normalizedUsername || !password) {
+      setMessage('请输入账号和密码');
+      return;
+    }
+
     if (mode === 'register' && password !== confirmPassword) {
       setMessage('两次输入的密码不一致');
       return;
@@ -62,6 +67,7 @@ export function ProfileScreen({
       setSubmitting(true);
       const nextSession = mode === 'login' ? await api.login(normalizedUsername, password) : await api.register(normalizedUsername, password);
       onSessionChange(nextSession);
+      setUsername('');
       setPassword('');
       setConfirmPassword('');
       setMessage(mode === 'login' ? '登录成功' : '注册成功，已自动登录');
@@ -168,37 +174,17 @@ function PasswordField({
   secure: boolean;
   onToggleSecure: () => void;
 }) {
-  const displayValue = secure ? '•'.repeat(value.length) : value;
-
-  function handleChangeText(nextValue: string) {
-    if (!secure) {
-      onChangeText(nextValue);
-      return;
-    }
-
-    if (nextValue.length < value.length) {
-      onChangeText(value.slice(0, nextValue.length));
-      return;
-    }
-
-    if (nextValue.length > value.length) {
-      const appendedText = nextValue.slice(value.length).replace(/•/g, '');
-      onChangeText(`${value}${appendedText}`);
-    }
-  }
-
   return (
     <View style={styles.passwordRow}>
       <TextInput
-        value={displayValue}
-        onChangeText={handleChangeText}
+        value={value}
+        onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={colors.muted}
         style={styles.passwordInput}
-        secureTextEntry={false}
+        secureTextEntry={secure}
         autoCapitalize="none"
         autoCorrect={false}
-        selection={secure ? { start: displayValue.length, end: displayValue.length } : undefined}
       />
       <Pressable
         style={({ pressed }) => [styles.passwordToggle, pressed && styles.passwordTogglePressed]}

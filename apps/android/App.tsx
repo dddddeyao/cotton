@@ -53,10 +53,14 @@ export default function App() {
 
       setSession(cachedSession);
 
-      const refreshedNews = await api.fetchNews();
-      if (isMounted) {
-        setNews(refreshedNews);
-        cache.setNews(refreshedNews);
+      try {
+        const refreshedNews = await api.fetchNews();
+        if (isMounted) {
+          setNews(refreshedNews);
+          void cache.setNews(refreshedNews);
+        }
+      } catch {
+        // Keep cached or bundled mock news when the configured API rejects the refresh.
       }
     }
 
@@ -69,7 +73,7 @@ export default function App() {
 
   const saveHistory = useCallback((items: RecognitionResult[]) => {
     setHistory(items);
-    cache.setHistory(items);
+    void cache.setHistory(items);
   }, []);
 
   const openTabs = useCallback(() => {
@@ -269,11 +273,17 @@ export default function App() {
     }
 
     if (view.name === 'agreement') {
+      const body =
+        view.kind === 'user'
+          ? '本系统用于棉花图像样本的颜色级、叶屑等级与相关指标展示，识别结果应结合分类标准与人工复核使用。用户应妥善保管账号信息，并遵守项目数据使用要求。'
+          : '应用会在本地缓存新闻、识别历史和登录会话。配置后端后，图片会通过识别接口上传，认证信息以 Authorization Bearer Token 形式发送。应用仅保存完成展示和账号功能所需的数据。';
+
       return (
         <SimplePage
           title={view.kind === 'user' ? '用户协议' : '隐私政策'}
           onBack={openTabs}
-          body="第一版先展示占位内容。正式发布前需要补齐完整协议正文、数据使用范围、权限说明和联系方式。"
+          body={body}
+          variant="document"
         />
       );
     }
@@ -296,7 +306,7 @@ export default function App() {
             session={session}
             onSessionChange={(nextSession) => {
               setSession(nextSession);
-              cache.setSession(nextSession);
+              void cache.setSession(nextSession);
             }}
             onOpenEditProfile={() => setView({ name: 'editProfile' })}
             onOpenCollection={() => setView({ name: 'collection' })}

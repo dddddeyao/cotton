@@ -4,3 +4,4 @@ target/
 uploads/
 *.log
 test.jpg
+model-service-python/

@@ -1,6 +1,6 @@
 import { appConfig } from '../config';
-import { requestJson, requestWithMock } from './request';
-import type { NewsItem, RecognitionMetric, RecognitionResult, UserSession } from '../types';
+import { ApiNetworkError, ApiUnavailableError, requestJson, requestWithMock } from './request';
+import type { NewsItem, RecognitionMetric, RecognitionResult, UserProfile, UserSession } from '../types';
 import { mockNews, mockRecognitionResult, mockHistory } from './mock';
 
 function delay<T>(data: T, ms = 300): Promise<T> {
@@ -9,6 +9,13 @@ function delay<T>(data: T, ms = 300): Promise<T> {
 
 function generateId(): string {
   return `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function shouldUseMock(error: unknown): boolean {
+  return (
+    appConfig.mockWhenApiUnavailable &&
+    (error instanceof ApiUnavailableError || error instanceof ApiNetworkError)
+  );
 }
 
 type AnyRecord = Record<string, unknown>;
@@ -48,11 +55,27 @@ function normalizeConfidence(value: unknown, fallback = 0): number {
   return Math.max(0, Math.min(1, normalized));
 }
 
+function resolveImageUri(value: string): string {
+  if (!value || /^[a-z][a-z0-9+.-]*:/i.test(value)) {
+    return value;
+  }
+
+  if (value.startsWith('/')) {
+    const baseUrl = appConfig.apiBaseUrl;
+    if (!baseUrl || value === baseUrl || value.startsWith(`${baseUrl}/`)) {
+      return value;
+    }
+    return `${baseUrl}${value}`;
+  }
+
+  return value;
+}
+
 function normalizeSession(raw: unknown, fallbackUsername: string): UserSession {
   const record = asRecord(raw);
   return {
     username: pickString(record, ['username', 'userName', 'account', 'name'], fallbackUsername),
-    token: pickString(record, ['token', 'accessToken', 'jwt'], `mock_token_${Date.now()}`),
+    token: pickString(record, ['token', 'accessToken', 'jwt']),
   };
 }
 
@@ -126,12 +149,12 @@ function normalizeRecognitionResult(
   const leafGrade = pickString(record, ['leafGrade', 'leaf_grade']);
   const derivedGrade = [colorGrade, leafGrade].filter(Boolean).join(' / ');
   const imageUri =
-    pickString(topLevelRecord, ['imageUri', 'imageUrl', 'image', 'url']) ||
+    pickString(topLevelRecord, ['imageUri', 'imageUrl', 'image', 'url', 'cottonAreaImage', 'impurityAreaImage']) ||
     (imageFile ? URL.createObjectURL(imageFile) : '');
 
   return {
     id: pickString(record, ['id', 'resultId', 'historyId'], generateId()),
-    imageUri,
+    imageUri: resolveImageUri(imageUri),
     createdAt: pickString(record, ['createdAt', 'createTime', 'time'], new Date().toISOString()),
     grade: pickString(record, ['grade', 'level', 'result'], derivedGrade || '待复核'),
     confidence,
@@ -151,6 +174,30 @@ function normalizeHistory(raw: unknown): RecognitionResult[] {
   return list.map((item) => normalizeRecognitionResult(item, null, false));
 }
 
+function normalizeProfile(raw: unknown, username: string): UserProfile {
+  const record = asRecord(raw);
+  return {
+    username: pickString(record, ['username', 'userName', 'account'], username),
+    nickname: pickString(record, ['nickname', 'name']),
+    phone: pickString(record, ['phone', 'mobile']),
+    organization: pickString(record, ['organization', 'company', 'department']),
+    role: pickString(record, ['role', 'identity'], '研究人员'),
+  };
+}
+
+function createLocalProfile(
+  username: string,
+  profile: Partial<Omit<UserProfile, 'username'>> = {}
+): UserProfile {
+  return {
+    username,
+    nickname: profile.nickname || '',
+    phone: profile.phone || '',
+    organization: profile.organization || '',
+    role: profile.role || '研究人员',
+  };
+}
+
 export const api = {
   async login(username: string, password: string): Promise<UserSession> {
     const result = await requestWithMock<unknown>(
@@ -158,7 +205,11 @@ export const api = {
       { username, token: 'mock_token_' + Date.now() },
       { method: 'POST', body: { username, password } }
     );
-    return normalizeSession(result, username);
+    const session = normalizeSession(result, username);
+    if (!session.token) {
+      throw new Error('登录接口未返回 token');
+    }
+    return session;
   },
 
   async register(username: string, password: string): Promise<UserSession> {
@@ -167,11 +218,66 @@ export const api = {
       { username, token: 'mock_token_' + Date.now() },
       { method: 'POST', body: { username, password } }
     );
-    return normalizeSession(result, username);
+    const session = normalizeSession(result, username);
+    if (!session.token) {
+      throw new Error('注册接口未返回 token');
+    }
+    return session;
   },
 
   async logout(): Promise<void> {
     return requestWithMock(appConfig.endpoints.logout, undefined, { method: 'POST' });
+  },
+
+  async changePassword(oldPassword: string, newPassword: string): Promise<void> {
+    try {
+      await requestJson<unknown>(appConfig.endpoints.changePassword, {
+        method: 'POST',
+        body: { oldPassword, newPassword },
+      });
+    } catch (error) {
+      if (shouldUseMock(error)) {
+        return;
+      }
+
+      throw error;
+    }
+  },
+
+  async fetchProfile(session: UserSession): Promise<UserProfile> {
+    try {
+      const data = await requestJson<unknown>(appConfig.endpoints.userProfile, {
+        headers: {
+          [appConfig.auth.tokenHeader]: `${appConfig.auth.tokenPrefix} ${session.token}`,
+        },
+      });
+      return normalizeProfile(data, session.username);
+    } catch (error) {
+      if (shouldUseMock(error)) {
+        return createLocalProfile(session.username);
+      }
+
+      throw error;
+    }
+  },
+
+  async updateProfile(session: UserSession, profile: Omit<UserProfile, 'username'>): Promise<UserProfile> {
+    try {
+      const data = await requestJson<unknown>(appConfig.endpoints.userProfile, {
+        method: 'PUT',
+        headers: {
+          [appConfig.auth.tokenHeader]: `${appConfig.auth.tokenPrefix} ${session.token}`,
+        },
+        body: profile,
+      });
+      return normalizeProfile(data, session.username);
+    } catch (error) {
+      if (shouldUseMock(error)) {
+        return createLocalProfile(session.username, profile);
+      }
+
+      throw error;
+    }
   },
 
   async fetchNews(): Promise<NewsItem[]> {
@@ -218,6 +324,10 @@ export const api = {
     const normalizedIds = ids
       .map((id) => Number(id))
       .filter((id) => Number.isFinite(id));
+
+    if (normalizedIds.length === 0) {
+      return;
+    }
 
     return requestWithMock(
       appConfig.endpoints.recognitionHistory,

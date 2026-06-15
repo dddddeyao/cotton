@@ -1,5 +1,17 @@
 import { appConfig } from '../config';
 
+export class ApiUnavailableError extends Error {
+  constructor(message = 'API_BASE_URL 未配置') {
+    super(message);
+  }
+}
+
+export class ApiNetworkError extends Error {
+  constructor(message = '网络请求失败') {
+    super(message);
+  }
+}
+
 function getSessionToken(): string | null {
   try {
     const raw = localStorage.getItem('session_cache');
@@ -35,9 +47,30 @@ function normalizeResponse<T>(body: unknown): T {
   return body as T;
 }
 
+function parseJsonSafely(rawText: string): unknown {
+  if (!rawText) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawText);
+  } catch {
+    return null;
+  }
+}
+
+function readErrorMessage(body: unknown): string {
+  if (!isRecord(body)) {
+    return '';
+  }
+
+  return String(body.message || body.msg || '');
+}
+
 type RequestOptions = {
   timeout?: number;
   isFormData?: boolean;
+  headers?: HeadersInit;
 };
 
 export async function requestJson<T>(
@@ -47,35 +80,46 @@ export async function requestJson<T>(
   const { timeout = appConfig.requestTimeoutMs, isFormData = false, method = 'GET', body } = options;
 
   if (!appConfig.apiBaseUrl && appConfig.mockWhenApiUnavailable) {
-    throw new Error('MOCK_NOT_AVAILABLE');
+    throw new ApiUnavailableError();
   }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
 
-  const headers: Record<string, string> = {};
+  const headers = new Headers(options.headers);
   const token = getSessionToken();
   if (token) {
-    headers[appConfig.auth.tokenHeader] = `${appConfig.auth.tokenPrefix} ${token}`;
+    headers.set(appConfig.auth.tokenHeader, `${appConfig.auth.tokenPrefix} ${token}`);
   }
 
-  if (!isFormData) {
-    headers['Content-Type'] = 'application/json';
+  if (!isFormData && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
   }
 
   try {
-    const res = await fetch(`${appConfig.apiBaseUrl}${path}`, {
-      method,
-      headers,
-      body: isFormData ? (body as FormData) : body ? JSON.stringify(body) : undefined,
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
+    let res: Response;
+    try {
+      res = await fetch(`${appConfig.apiBaseUrl}${path}`, {
+        method,
+        headers,
+        body: isFormData ? (body as FormData) : body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new ApiNetworkError('请求超时，请稍后重试');
+      }
+      throw new ApiNetworkError();
     }
 
-    const json: unknown = await res.json();
+    const rawText = await res.text();
+    const json = parseJsonSafely(rawText);
+
+    if (!res.ok) {
+      const message = readErrorMessage(json);
+      throw new Error(message || `HTTP ${res.status}`);
+    }
+
     return normalizeResponse(json);
   } finally {
     clearTimeout(timer);
@@ -89,10 +133,13 @@ export async function requestWithMock<T>(
 ): Promise<T> {
   try {
     return await requestJson<T>(path, options);
-  } catch {
-    if (appConfig.mockWhenApiUnavailable) {
+  } catch (error) {
+    if (
+      appConfig.mockWhenApiUnavailable &&
+      (error instanceof ApiUnavailableError || error instanceof ApiNetworkError)
+    ) {
       return mockData;
     }
-    throw new Error('网络请求失败');
+    throw error;
   }
 }

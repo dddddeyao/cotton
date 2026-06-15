@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Building2, Phone, Save, UserRound } from 'lucide-react';
 import { useApp } from '../context/useApp';
 import { useToast } from '../components/useToast';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
+import { api } from '../api';
+import type { UserProfile } from '../types';
 
 type ProfileCache = {
   nickname: string;
@@ -11,6 +13,20 @@ type ProfileCache = {
   organization: string;
   role: string;
 };
+
+type ProfileState = {
+  username?: string;
+  data: ProfileCache;
+};
+
+function toProfileCache(profile: UserProfile): ProfileCache {
+  return {
+    nickname: profile.nickname || '',
+    phone: profile.phone || '',
+    organization: profile.organization || '',
+    role: profile.role || defaultProfile.role,
+  };
+}
 
 const defaultProfile: ProfileCache = {
   nickname: '',
@@ -34,8 +50,34 @@ export default function EditProfilePage() {
   const { session } = useApp();
   const { showToast } = useToast();
   useDocumentTitle('编辑资料');
-  const [profile, setProfile] = useState<ProfileCache>(() => readProfileCache(session?.username));
+  const [profile, setProfile] = useState<ProfileState>(() => ({
+    username: session?.username,
+    data: readProfileCache(session?.username),
+  }));
   const [saved, setSaved] = useState(false);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(() => Boolean(session));
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!session) return;
+
+    let active = true;
+    api.fetchProfile(session)
+      .then((remoteProfile) => {
+        if (!active) return;
+        const nextProfile = toProfileCache(remoteProfile);
+        setProfile({ username: session.username, data: nextProfile });
+        localStorage.setItem(`profile_cache_${session.username}`, JSON.stringify(nextProfile));
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setIsLoadingProfile(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [session]);
 
   if (!session) {
     return (
@@ -58,20 +100,43 @@ export default function EditProfilePage() {
     );
   }
 
-  const handleSave = () => {
-    if (profile.phone && !/^1[3-9]\d{9}$/.test(profile.phone)) {
+  const handleSave = async () => {
+    const visibleProfile =
+      profile.username === session.username ? profile.data : readProfileCache(session.username);
+
+    if (visibleProfile.phone && !/^1[3-9]\d{9}$/.test(visibleProfile.phone)) {
       showToast('手机号格式不正确', 'error');
       return;
     }
-    localStorage.setItem(`profile_cache_${session.username}`, JSON.stringify(profile));
-    setSaved(true);
-    showToast('资料已保存', 'success');
-    setTimeout(() => setSaved(false), 2000);
+
+    try {
+      setIsSaving(true);
+      const savedProfile = await api.updateProfile(session, visibleProfile);
+      const nextProfile = toProfileCache(savedProfile);
+      localStorage.setItem(`profile_cache_${session.username}`, JSON.stringify(nextProfile));
+      setProfile({ username: session.username, data: nextProfile });
+      setSaved(true);
+      showToast('资料已保存', 'success');
+      setTimeout(() => setSaved(false), 2000);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '保存失败', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const updateField = (field: keyof ProfileCache, value: string) => {
-    setProfile((prev) => ({ ...prev, [field]: value }));
+    setProfile((prev) => ({
+      username: session.username,
+      data: {
+        ...(prev.username === session.username ? prev.data : readProfileCache(session.username)),
+        [field]: value,
+      },
+    }));
   };
+
+  const visibleProfile =
+    profile.username === session.username ? profile.data : readProfileCache(session.username);
 
   return (
     <div className="pt-4 space-y-4">
@@ -94,7 +159,7 @@ export default function EditProfilePage() {
           </div>
           <div>
             <p className="font-bold text-ink">{session.username}</p>
-            <p className="text-sm text-muted">本地资料将在浏览器中保留</p>
+            <p className="text-sm text-muted">{isLoadingProfile ? '正在同步账号资料' : '资料会同步到当前账号'}</p>
           </div>
         </div>
 
@@ -112,7 +177,7 @@ export default function EditProfilePage() {
           <input
             className="w-full rounded-lg border border-line bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-primary/30"
             placeholder="请输入昵称"
-            value={profile.nickname}
+            value={visibleProfile.nickname}
             onChange={(e) => updateField('nickname', e.target.value)}
           />
         </div>
@@ -124,7 +189,7 @@ export default function EditProfilePage() {
           <input
             className="w-full rounded-lg border border-line bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-primary/30"
             placeholder="请输入手机号"
-            value={profile.phone}
+            value={visibleProfile.phone}
             onChange={(e) => updateField('phone', e.target.value)}
           />
         </div>
@@ -136,7 +201,7 @@ export default function EditProfilePage() {
           <input
             className="w-full rounded-lg border border-line bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-primary/30"
             placeholder="请输入单位或机构"
-            value={profile.organization}
+            value={visibleProfile.organization}
             onChange={(e) => updateField('organization', e.target.value)}
           />
         </div>
@@ -144,7 +209,7 @@ export default function EditProfilePage() {
           <label className="text-muted text-sm block mb-1">身份</label>
           <select
             className="w-full rounded-lg border border-line bg-background px-4 py-3 text-base outline-none focus:ring-2 focus:ring-primary/30"
-            value={profile.role}
+            value={visibleProfile.role}
             onChange={(e) => updateField('role', e.target.value)}
           >
             <option>研究人员</option>
@@ -159,11 +224,12 @@ export default function EditProfilePage() {
 
         <button
           type="button"
-          className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3 text-base font-semibold text-white"
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
           onClick={handleSave}
+          disabled={isSaving}
         >
           <Save size={18} strokeWidth={1.8} />
-          <span>保存</span>
+          <span>{isSaving ? '保存中...' : '保存'}</span>
         </button>
       </div>
     </div>

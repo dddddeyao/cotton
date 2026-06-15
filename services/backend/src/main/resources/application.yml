@@ -8,6 +8,7 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
+    open-in-view: ${SPRING_JPA_OPEN_IN_VIEW:false}
     hibernate:
       ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
     show-sql: ${SPRING_JPA_SHOW_SQL:false}
@@ -29,7 +30,11 @@ jwt:
 python:
   service:
     url: ${PYTHON_SERVICE_URL:http://127.0.0.1:5000}
+    connect-timeout-ms: ${PYTHON_SERVICE_CONNECT_TIMEOUT_MS:5000}
+    read-timeout-ms: ${PYTHON_SERVICE_READ_TIMEOUT_MS:180000}
 
 app:
+  upload-dir: ${APP_UPLOAD_DIR:uploads}
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:*}
+    allow-credentials: ${APP_CORS_ALLOW_CREDENTIALS:false}

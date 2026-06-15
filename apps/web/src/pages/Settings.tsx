@@ -14,6 +14,7 @@ import { useApp } from '../context/useApp';
 import { useToast } from '../components/useToast';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { appConfig } from '../config';
+import { api } from '../api';
 
 type CacheStats = {
   newsCount: number;
@@ -45,6 +46,7 @@ export default function SettingsPage() {
   useDocumentTitle('应用设置');
   const [cacheStats, setCacheStats] = useState<CacheStats>(() => readCacheStats());
   const [showPasswordPanel, setShowPasswordPanel] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     oldPassword: '',
     newPassword: '',
@@ -69,7 +71,7 @@ export default function SettingsPage() {
     showToast('当前为最新静态前端版本', 'success');
   };
 
-  const handlePasswordSubmit = () => {
+  const handlePasswordSubmit = async () => {
     if (!session) {
       showToast('请先登录', 'error');
       return;
@@ -86,9 +88,18 @@ export default function SettingsPage() {
       showToast('两次新密码不一致', 'error');
       return;
     }
-    setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
-    setShowPasswordPanel(false);
-    showToast(appConfig.apiBaseUrl ? '密码修改请求已提交' : '密码格式校验通过', 'success');
+
+    try {
+      setIsChangingPassword(true);
+      await api.changePassword(passwordForm.oldPassword, passwordForm.newPassword);
+      setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+      setShowPasswordPanel(false);
+      showToast(appConfig.apiBaseUrl ? '密码已修改' : '密码格式校验通过', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '修改密码失败', 'error');
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   return (
@@ -194,10 +205,11 @@ export default function SettingsPage() {
           </div>
           <button
             type="button"
-            className="mt-4 rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-white"
+            className="mt-4 rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
             onClick={handlePasswordSubmit}
+            disabled={isChangingPassword}
           >
-            提交
+            {isChangingPassword ? '提交中...' : '提交'}
           </button>
         </section>
       )}

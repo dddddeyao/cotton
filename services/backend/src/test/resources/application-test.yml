@@ -5,6 +5,7 @@ spring:
     password:
     driver-class-name: org.h2.Driver
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: create-drop
     show-sql: false
@@ -19,3 +20,11 @@ jwt:
 python:
   service:
     url: http://127.0.0.1:5000
+    connect-timeout-ms: 5000
+    read-timeout-ms: 180000
+
+app:
+  upload-dir: ${java.io.tmpdir}/cotton-recognition-test-uploads
+  cors:
+    allowed-origins: "*"
+    allow-credentials: false

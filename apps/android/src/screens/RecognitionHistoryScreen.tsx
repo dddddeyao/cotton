@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { EmptyState, StackPage } from '../components/common';
@@ -17,7 +17,13 @@ export function RecognitionHistoryScreen({
   onDelete: (ids: string[]) => void | Promise<void>;
 }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
   const allSelected = history.length > 0 && selectedIds.length === history.length;
+
+  useEffect(() => {
+    const availableIds = new Set(history.map((item) => item.id));
+    setSelectedIds((current) => current.filter((id) => availableIds.has(id)));
+  }, [history]);
 
   function toggle(id: string) {
     setSelectedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
@@ -30,19 +36,21 @@ export function RecognitionHistoryScreen({
           {history.map((item) => {
             const selected = selectedIds.includes(item.id);
             return (
-              <Pressable key={item.id} style={styles.historyCard} onPress={() => onOpenResult(item)} accessibilityRole="button">
+              <View key={item.id} style={styles.historyCard}>
                 <Pressable style={[styles.checkCircle, selected && styles.checkCircleActive]} onPress={() => toggle(item.id)}>
                   <Text style={styles.checkText}>{selected ? '✓' : ''}</Text>
                 </Pressable>
-                <View style={styles.historyThumb}>
-                  {item.imageUri ? <Image source={{ uri: item.imageUri }} style={styles.historyImage} /> : <Text style={styles.historyThumbText}>AI</Text>}
-                </View>
-                <View style={styles.historyInfo}>
-                  <Text style={styles.historyTitle}>{item.grade}</Text>
-                  <Text style={styles.historyMeta}>{item.createdAt}</Text>
-                  <Text style={styles.historyMeta}>置信度 {Math.round(item.confidence * 100)}%</Text>
-                </View>
-              </Pressable>
+                <Pressable style={styles.historyOpenArea} onPress={() => onOpenResult(item)} accessibilityRole="button">
+                  <View style={styles.historyThumb}>
+                    {item.imageUri ? <Image source={{ uri: item.imageUri }} style={styles.historyImage} /> : <Text style={styles.historyThumbText}>AI</Text>}
+                  </View>
+                  <View style={styles.historyInfo}>
+                    <Text style={styles.historyTitle}>{item.grade}</Text>
+                    <Text style={styles.historyMeta}>{item.createdAt}</Text>
+                    <Text style={styles.historyMeta}>置信度 {Math.round(item.confidence * 100)}%</Text>
+                  </View>
+                </Pressable>
+              </View>
             );
           })}
           {history.length === 0 ? <EmptyState title="暂无识别记录" /> : null}
@@ -59,15 +67,20 @@ export function RecognitionHistoryScreen({
             <Text style={styles.selectAllText}>全选</Text>
           </Pressable>
           <Pressable
-            style={[styles.deleteButton, selectedIds.length === 0 && styles.deleteButtonDisabled]}
-            disabled={selectedIds.length === 0}
-            onPress={() => {
-              onDelete(selectedIds);
-              setSelectedIds([]);
+            style={[styles.deleteButton, (selectedIds.length === 0 || isDeleting) && styles.deleteButtonDisabled]}
+            disabled={selectedIds.length === 0 || isDeleting}
+            onPress={async () => {
+              setIsDeleting(true);
+              try {
+                await onDelete(selectedIds);
+                setSelectedIds([]);
+              } finally {
+                setIsDeleting(false);
+              }
             }}
             accessibilityRole="button"
           >
-            <Text style={styles.deleteButtonText}>删除</Text>
+            <Text style={styles.deleteButtonText}>{isDeleting ? '删除中...' : '删除'}</Text>
           </Pressable>
         </View>
       </View>
@@ -93,6 +106,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#efe5f7',
     ...shadow,
+  },
+  historyOpenArea: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   checkCircle: {
     width: 24,

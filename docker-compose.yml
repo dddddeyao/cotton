@@ -15,6 +15,12 @@ services:
       - mysql_data:/var/lib/mysql
     ports:
       - "${MYSQL_PUBLIC_PORT:-127.0.0.1:3306}:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
 
   model-service:
     build:
@@ -35,14 +41,22 @@ services:
           create_host_path: false
     expose:
       - "5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=5).read()"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 60s
 
   backend:
     build:
       context: ./services/backend
     restart: unless-stopped
     depends_on:
-      - mysql
-      - model-service
+      mysql:
+        condition: service_healthy
+      model-service:
+        condition: service_healthy
     environment:
       SERVER_PORT: 8080
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-cotton_db}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
@@ -52,11 +66,21 @@ services:
       JWT_SECRET: ${JWT_SECRET:-Y29udG9uLXJlY29nbml0aW9uLWFzc2lzdGFudC1zZWNyZXQta2V5LWZvci1wcm9kdWN0aW9uLTIwMjY=}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-604800000}
       PYTHON_SERVICE_URL: http://model-service:5000
+      PYTHON_SERVICE_CONNECT_TIMEOUT_MS: ${PYTHON_SERVICE_CONNECT_TIMEOUT_MS:-5000}
+      PYTHON_SERVICE_READ_TIMEOUT_MS: ${PYTHON_SERVICE_READ_TIMEOUT_MS:-180000}
+      APP_UPLOAD_DIR: /app/uploads
       APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-*}
+      APP_CORS_ALLOW_CREDENTIALS: ${APP_CORS_ALLOW_CREDENTIALS:-false}
     volumes:
       - backend_uploads:/app/uploads
     expose:
       - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
 
   web:
     build:
@@ -69,7 +93,8 @@ services:
         VITE_RECOGNITION_UPLOAD_FIELD_NAME: ${VITE_RECOGNITION_UPLOAD_FIELD_NAME:-file}
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "${WEB_PUBLIC_PORT:-80}:80"
 

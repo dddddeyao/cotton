@@ -50,6 +50,7 @@ Thumbs.db
 
 # ===== Uploads =====
 uploads/
+output/
 
 # ===== Python 模型权重 (大文件) =====
 *.pth

@@ -1,5 +1,6 @@
 package com.example.springbootpythonml.service;
 
+import com.example.springbootpythonml.dto.RecognitionHistoryItem;
 import com.example.springbootpythonml.dto.RecognitionResult;
 import com.example.springbootpythonml.entity.RecognitionRecord;
 import com.example.springbootpythonml.repository.RecognitionRecordRepository;
@@ -17,23 +18,32 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.HashMap;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
-import java.util.Map;
+import java.util.Locale;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
 public class RecognitionService {
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
     private final RecognitionRecordRepository recordRepository;
     private final ObjectMapper objectMapper;
     private final String flaskBaseUrl;
+    private final Path uploadPath;
 
-    public RecognitionService(RecognitionRecordRepository recordRepository,
-                              @Value("${python.service.url}") String flaskBaseUrl) {
+    public RecognitionService(RestTemplate restTemplate,
+                              RecognitionRecordRepository recordRepository,
+                              @Value("${python.service.url}") String flaskBaseUrl,
+                              @Value("${app.upload-dir:uploads}") String uploadDir) {
+        this.restTemplate = restTemplate;
         this.recordRepository = recordRepository;
         this.flaskBaseUrl = flaskBaseUrl;
+        this.uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
         this.objectMapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -52,8 +62,13 @@ public class RecognitionService {
 
         ResponseEntity<String> resp = restTemplate.postForEntity(url, req, String.class);
         String json = resp.getBody();
+        if (json == null || json.isBlank()) {
+            throw new IllegalStateException("模型服务返回为空");
+        }
 
         RecognitionResult result = objectMapper.readValue(json, RecognitionResult.class);
+        String storedImageUri = saveUpload(file);
+        result.setImageUri(storedImageUri);
 
         if (result.getDetectionResult() != null) {
             if (result.getLabel() == null && result.getDetectionResult().getColorGrade() != null) {
@@ -67,7 +82,7 @@ public class RecognitionService {
         if (userId != null && result.getDetectionResult() != null) {
             RecognitionRecord record = new RecognitionRecord();
             record.setUserId(userId);
-            record.setImageUri(file.getOriginalFilename());
+            record.setImageUri(storedImageUri);
             record.setColorGrade(result.getDetectionResult().getColorGrade());
             record.setImpurityGrade(result.getDetectionResult().getImpurityGrade());
             record.setCottonArea(result.getDetectionResult().getCottonArea());
@@ -75,28 +90,22 @@ public class RecognitionService {
             record.setAreaRatio(result.getDetectionResult().getAreaRatio());
             record.setConfidence(result.getDetectionResult().getConfidence());
             record.setConclusion("等级 " + result.getDetectionResult().getColorGrade());
-            recordRepository.save(record);
+            record = recordRepository.save(record);
+
+            result.setId(record.getId());
+            result.setImageUri(record.getImageUri());
+            result.setCreatedAt(record.getCreatedAt());
+            result.setConclusion(record.getConclusion());
         }
 
         return result;
     }
 
-    public List<Map<String, Object>> getHistory(Long userId) {
-        List<RecognitionRecord> records = recordRepository.findByUserIdOrderByCreatedAtDesc(userId);
-        return records.stream().map(r -> {
-            Map<String, Object> map = new HashMap<>();
-            map.put("id", r.getId());
-            map.put("imageUri", r.getImageUri());
-            map.put("colorGrade", r.getColorGrade());
-            map.put("impurityGrade", r.getImpurityGrade());
-            map.put("cottonArea", r.getCottonArea());
-            map.put("impurityArea", r.getImpurityArea());
-            map.put("areaRatio", r.getAreaRatio());
-            map.put("confidence", r.getConfidence());
-            map.put("conclusion", r.getConclusion());
-            map.put("createdAt", r.getCreatedAt());
-            return map;
-        }).collect(Collectors.toList());
+    public List<RecognitionHistoryItem> getHistory(Long userId) {
+        return recordRepository.findByUserIdOrderByCreatedAtDesc(userId)
+                .stream()
+                .map(RecognitionHistoryItem::from)
+                .collect(Collectors.toList());
     }
 
     public void deleteHistory(List<Long> ids, Long userId) {
@@ -105,6 +114,39 @@ public class RecognitionService {
                 .filter(r -> r.getUserId().equals(userId))
                 .collect(Collectors.toList());
         recordRepository.deleteAll(records);
+    }
+
+    private String saveUpload(MultipartFile file) throws IOException {
+        Files.createDirectories(uploadPath);
+
+        String storedFilename = UUID.randomUUID() + extensionOf(file.getOriginalFilename());
+        Path target = uploadPath.resolve(storedFilename).normalize();
+        if (!target.startsWith(uploadPath)) {
+            throw new IOException("上传路径不合法");
+        }
+
+        try (InputStream inputStream = file.getInputStream()) {
+            Files.copy(inputStream, target, StandardCopyOption.REPLACE_EXISTING);
+        }
+
+        return "/uploads/" + storedFilename;
+    }
+
+    private String extensionOf(String filename) {
+        if (filename == null) {
+            return ".jpg";
+        }
+
+        int dotIndex = filename.lastIndexOf('.');
+        if (dotIndex < 0 || dotIndex == filename.length() - 1) {
+            return ".jpg";
+        }
+
+        String extension = filename.substring(dotIndex).toLowerCase(Locale.ROOT);
+        return switch (extension) {
+            case ".jpg", ".jpeg", ".png", ".webp" -> extension;
+            default -> ".jpg";
+        };
     }
 
     static class MultipartInputStreamFileResource extends InputStreamResource {

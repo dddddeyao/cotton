@@ -42,7 +42,7 @@ EXPO_PUBLIC_API_BASE_URL=http://your-domain-or-ip/api
 EXPO_PUBLIC_MOCK_WHEN_API_UNAVAILABLE=false
 ```
 
-真机调试时不要使用 `localhost` 作为后端地址，应使用局域网 IP、服务器 IP 或域名。
+`EXPO_PUBLIC_API_BASE_URL` 留空时会直接使用 mock 数据，便于不启动后端时演示。真机调试时不要使用 `localhost` 作为后端地址，应使用局域网 IP、服务器 IP 或域名。
 
 ## Web 前端
 
@@ -59,6 +59,8 @@ npm run dev
 ```bash
 copy .env.example .env.local
 ```
+
+`VITE_API_BASE_URL` 留空时会直接使用 mock 数据，便于单独验收静态页面。
 
 本地直连后端：
 
@@ -89,8 +91,14 @@ SPRING_DATASOURCE_USERNAME
 SPRING_DATASOURCE_PASSWORD
 JWT_SECRET
 PYTHON_SERVICE_URL
+PYTHON_SERVICE_CONNECT_TIMEOUT_MS
+PYTHON_SERVICE_READ_TIMEOUT_MS
+APP_UPLOAD_DIR
 APP_CORS_ALLOWED_ORIGINS
+APP_CORS_ALLOW_CREDENTIALS
 ```
+
+识别上传图片默认保存到后端工作目录的 `uploads/`，可通过 `APP_UPLOAD_DIR` 调整。接口返回的图片路径形如 `/uploads/{filename}`。
 
 ## Python 模型服务
 
@@ -117,12 +125,18 @@ fenge_best.pth
 POST /auth/login
 POST /auth/register
 POST /auth/logout
+POST /auth/change-password
 GET  /news
 POST /recognition
 GET  /recognition/history
 DELETE /recognition/history
+GET  /user/profile
+PUT  /user/profile
+GET  /uploads/{filename}
 GET  /health
 ```
+
+`DELETE /recognition/history` 使用 JSON body 批量删除，例如 `{ "ids": [1, 2] }`。
 
 统一响应格式：
 

@@ -260,7 +260,7 @@ POST /auth/change-password
 GET  /news
 POST /recognition
 GET  /recognition/history
-DELETE /recognition/history/:id
+DELETE /recognition/history
 GET  /user/profile
 PUT  /user/profile
 ```

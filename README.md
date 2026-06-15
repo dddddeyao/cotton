@@ -72,9 +72,10 @@ python model_service2.py
 
 ## 接口配置
 
-- Android 默认后端地址在 `apps/android/src/config.ts`。
-- Web 可复制 `apps/web/.env.example` 为 `apps/web/.env.local` 并配置 `VITE_API_BASE_URL`。
+- Android 可复制 `apps/android/.env.example` 为 `apps/android/.env.local` 并配置 `EXPO_PUBLIC_API_BASE_URL`；留空时走 mock 兜底，真机联调或正式打包必须改为局域网 IP、服务器 IP 或域名。
+- Web 可复制 `apps/web/.env.example` 为 `apps/web/.env.local` 并配置 `VITE_API_BASE_URL`；留空时走 mock 兜底，Docker/Nginx 同域部署推荐 `/api`。
 - Spring Boot 默认端口为 `8080`，Python Flask 推理服务默认端口为 `5000`。
+- 根目录 `.env.example` 用于 Docker Compose，不会自动被 `apps/android` 或 `apps/web` 的本地开发命令读取。
 
 ## 编译检查
 

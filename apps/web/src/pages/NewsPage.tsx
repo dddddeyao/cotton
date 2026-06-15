@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { CalendarDays, Search, Sparkles, TrendingUp } from 'lucide-react';
 import { useApp } from '../context/useApp';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
+import { appConfig } from '../config';
 
 const toneStyles: Record<string, { panel: string; dot: string; label: string }> = {
   blue: {
@@ -45,6 +46,7 @@ export default function NewsPage() {
       n.source.toLowerCase().includes(q)
   );
   const latest = news[0];
+  const dataMode = appConfig.apiBaseUrl ? 'API' : 'Mock';
 
   return (
     <div className="space-y-3 md:space-y-4">
@@ -65,7 +67,7 @@ export default function NewsPage() {
               {[
                 ['资讯样本', news.length || '-'],
                 ['检索结果', loading ? '-' : filtered.length],
-                ['数据源', 'Mock/API'],
+                ['数据源', dataMode],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-lg border border-line bg-background/70 px-3 py-2.5">
                   <p className="text-lg font-bold text-ink">{value}</p>

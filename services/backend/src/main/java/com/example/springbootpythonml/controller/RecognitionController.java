@@ -1,25 +1,29 @@
 package com.example.springbootpythonml.controller;
 
 import com.example.springbootpythonml.dto.ApiResponse;
+import com.example.springbootpythonml.dto.DeleteHistoryRequest;
+import com.example.springbootpythonml.dto.RecognitionHistoryItem;
 import com.example.springbootpythonml.dto.RecognitionResult;
 import com.example.springbootpythonml.service.RecognitionService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/recognition")
 public class RecognitionController {
 
     private final RecognitionService recognitionService;
+    private final RecognitionRequestHandler recognitionRequestHandler;
 
-    public RecognitionController(RecognitionService recognitionService) {
+    public RecognitionController(RecognitionService recognitionService,
+                                 RecognitionRequestHandler recognitionRequestHandler) {
         this.recognitionService = recognitionService;
+        this.recognitionRequestHandler = recognitionRequestHandler;
     }
 
     @PostMapping
@@ -31,44 +35,37 @@ public class RecognitionController {
         boolean includeImages = !"0".equals(images);
         Long userId = authentication != null ? (Long) authentication.getPrincipal() : null;
 
-        try {
-            RecognitionResult result = recognitionService.recognize(file, includeImages, userId);
-
-            if (result.getErrorMessage() != null) {
-                return ResponseEntity.ok(ApiResponse.error(500, result.getErrorMessage()));
-            }
-
-            return ResponseEntity.ok(ApiResponse.success(result));
-        } catch (IOException e) {
-            return ResponseEntity.ok(ApiResponse.error(500, "识别失败: " + e.getMessage()));
-        }
+        return recognitionRequestHandler.handle(file, includeImages, userId);
     }
 
     @GetMapping("/history")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getHistory(
+    public ResponseEntity<ApiResponse<List<RecognitionHistoryItem>>> getHistory(
             Authentication authentication) {
 
         if (authentication == null) {
-            return ResponseEntity.ok(ApiResponse.error(401, "请先登录"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error(401, "请先登录"));
         }
 
         Long userId = (Long) authentication.getPrincipal();
-        List<Map<String, Object>> history = recognitionService.getHistory(userId);
+        List<RecognitionHistoryItem> history = recognitionService.getHistory(userId);
         return ResponseEntity.ok(ApiResponse.success(history));
     }
 
     @DeleteMapping("/history")
     public ResponseEntity<ApiResponse<Void>> deleteHistory(
-            @RequestBody Map<String, List<Long>> body,
+            @RequestBody DeleteHistoryRequest body,
             Authentication authentication) {
 
         if (authentication == null) {
-            return ResponseEntity.ok(ApiResponse.error(401, "请先登录"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error(401, "请先登录"));
         }
 
-        List<Long> ids = body.get("ids");
+        List<Long> ids = body == null ? null : body.getIds();
         if (ids == null || ids.isEmpty()) {
-            return ResponseEntity.ok(ApiResponse.error(400, "请指定要删除的记录"));
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(400, "请指定要删除的记录"));
         }
 
         Long userId = (Long) authentication.getPrincipal();

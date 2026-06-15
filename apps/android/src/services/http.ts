@@ -23,6 +23,12 @@ export class ApiUnavailableError extends Error {
   }
 }
 
+export class ApiNetworkError extends Error {
+  constructor(message = '网络请求失败') {
+    super(message);
+  }
+}
+
 function isFormData(body: unknown): body is FormData {
   return typeof FormData !== 'undefined' && body instanceof FormData;
 }
@@ -41,6 +47,18 @@ function readEnvelopeMessage(payload: unknown) {
 
   const envelope = payload as ApiEnvelope<unknown>;
   return envelope.message || envelope.msg || '';
+}
+
+function parseJsonSafely(rawText: string): unknown {
+  if (!rawText) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawText);
+  } catch {
+    return null;
+  }
 }
 
 function unwrapEnvelope<T>(payload: unknown): T {
@@ -87,27 +105,30 @@ export async function requestJson<T>(path: string, options: RequestJsonOptions =
   }
 
   try {
-    const response = await fetch(buildUrl(path), {
-      method: options.method ?? 'GET',
-      body: options.body as BodyInit | undefined,
-      headers,
-      signal: controller.signal,
-    });
+    let response: Response;
+    try {
+      response = await fetch(buildUrl(path), {
+        method: options.method ?? 'GET',
+        body: options.body as BodyInit | undefined,
+        headers,
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new ApiNetworkError('请求超时，请稍后重试');
+      }
+
+      throw new ApiNetworkError();
+    }
 
     const rawText = await response.text();
-    const payload = rawText ? JSON.parse(rawText) : null;
+    const payload = parseJsonSafely(rawText);
 
     if (!response.ok) {
       throw new Error(readEnvelopeMessage(payload) || `HTTP ${response.status}`);
     }
 
     return unwrapEnvelope<T>(payload);
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('请求超时，请稍后重试');
-    }
-
-    throw error;
   } finally {
     clearTimeout(timeoutId);
   }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check, Clock3, Database, Trash2 } from 'lucide-react';
 import { api } from '../api';
@@ -7,12 +7,38 @@ import { useToast } from '../components/useToast';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 export default function RecognitionHistoryPage() {
-  const { history, removeHistoryItems } = useApp();
+  const { history, setHistory, removeHistoryItems, session } = useApp();
   const navigate = useNavigate();
   const { showToast } = useToast();
   useDocumentTitle('识别记录');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
+  const [isLoading, setIsLoading] = useState(() => Boolean(session));
+
+  useEffect(() => {
+    if (!session) return;
+
+    let active = true;
+    api.fetchHistory()
+      .then((remoteHistory) => {
+        if (!active) return;
+        setHistory(remoteHistory);
+      })
+      .catch(() => {
+        if (active) showToast('历史记录同步失败，已保留本地记录', 'error');
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [session, setHistory, showToast]);
+
+  const availableIds = new Set(history.map((item) => item.id));
+  const effectiveSelectedIds = selectedIds.filter((id) => availableIds.has(id));
+  const allSelected = history.length > 0 && effectiveSelectedIds.length === history.length;
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) =>
@@ -21,7 +47,7 @@ export default function RecognitionHistoryPage() {
   };
 
   const toggleAll = () => {
-    if (selectedIds.length === history.length) {
+    if (allSelected) {
       setSelectedIds([]);
     } else {
       setSelectedIds(history.map((h) => h.id));
@@ -29,16 +55,23 @@ export default function RecognitionHistoryPage() {
   };
 
   const handleDelete = async () => {
-    if (selectedIds.length === 0 || deleting) return;
-    if (!window.confirm(`确认删除 ${selectedIds.length} 条记录？`)) return;
+    if (effectiveSelectedIds.length === 0 || deleting) return;
+    if (!window.confirm(`确认删除 ${effectiveSelectedIds.length} 条记录？`)) return;
     setDeleting(true);
     try {
-      await api.deleteHistory(selectedIds);
-      removeHistoryItems(selectedIds);
+      const remoteIds = history
+        .filter((item) => effectiveSelectedIds.includes(item.id) && !item.isLocal && Number.isFinite(Number(item.id)))
+        .map((item) => item.id);
+
+      if (remoteIds.length > 0) {
+        await api.deleteHistory(remoteIds);
+      }
+
+      removeHistoryItems(effectiveSelectedIds);
       setSelectedIds([]);
       showToast('记录已删除', 'success');
-    } catch {
-      showToast('删除失败，请稍后重试', 'error');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '删除失败，请稍后重试', 'error');
     } finally {
       setDeleting(false);
     }
@@ -70,6 +103,7 @@ export default function RecognitionHistoryPage() {
           返回
         </button>
         <h2 className="text-xl font-bold text-ink">识别记录</h2>
+        {isLoading && <span className="text-sm text-muted">同步中...</span>}
       </div>
 
       {history.length === 0 ? (
@@ -81,7 +115,7 @@ export default function RecognitionHistoryPage() {
           <section className="grid gap-3 md:grid-cols-3">
             {[
               ['记录总数', history.length],
-              ['选中记录', selectedIds.length],
+              ['选中记录', effectiveSelectedIds.length],
               ['平均置信度', `${Math.round((history.reduce((sum, item) => sum + item.confidence, 0) / history.length) * 100)}%`],
             ].map(([label, value]) => (
               <div key={label} className="rounded-lg border border-line bg-surface-strong p-4 shadow-card">
@@ -102,7 +136,7 @@ export default function RecognitionHistoryPage() {
                   type="button"
                   aria-label="选择记录"
                   className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
-                    selectedIds.includes(item.id)
+                    effectiveSelectedIds.includes(item.id)
                       ? 'bg-primary border-primary'
                       : 'border-line'
                   }`}
@@ -111,7 +145,7 @@ export default function RecognitionHistoryPage() {
                     toggleSelect(item.id);
                   }}
                 >
-                  {selectedIds.includes(item.id) && (
+                  {effectiveSelectedIds.includes(item.id) && (
                     <Check size={14} strokeWidth={2.4} className="text-white" />
                   )}
                 </button>
@@ -142,12 +176,12 @@ export default function RecognitionHistoryPage() {
             >
               <div
                 className={`flex h-6 w-6 items-center justify-center rounded-full border-2 ${
-                  selectedIds.length === history.length
+                  allSelected
                     ? 'bg-primary border-primary'
                     : 'border-line'
                 }`}
               >
-                {selectedIds.length === history.length && (
+                {allSelected && (
                   <Check size={14} strokeWidth={2.4} className="text-white" />
                 )}
               </div>
@@ -156,11 +190,11 @@ export default function RecognitionHistoryPage() {
             <button
               type="button"
               className={`inline-flex items-center gap-2 rounded-full px-6 py-2 text-sm font-semibold ${
-                selectedIds.length > 0 && !deleting
+                effectiveSelectedIds.length > 0 && !deleting
                   ? 'bg-danger text-white'
                   : 'bg-muted/30 text-muted cursor-not-allowed'
               }`}
-              disabled={selectedIds.length === 0 || deleting}
+              disabled={effectiveSelectedIds.length === 0 || deleting}
               onClick={handleDelete}
             >
               <Trash2 size={16} strokeWidth={1.8} />

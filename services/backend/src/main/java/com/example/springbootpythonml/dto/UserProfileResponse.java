@@ -1,59 +1,31 @@
-package com.example.springbootpythonml.entity;
+package com.example.springbootpythonml.dto;
 
-import jakarta.persistence.*;
+import com.example.springbootpythonml.entity.User;
+
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "users")
-public class User {
+public class UserProfileResponse {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(nullable = false, unique = true, length = 50)
     private String username;
-
-    @Column(nullable = false, length = 255)
-    private String password;
-
-    @Column(length = 50)
     private String nickname;
-
-    @Column(length = 20)
     private String phone;
-
-    @Column(length = 100)
     private String organization;
-
-    @Column(length = 50)
     private String role;
-
-    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
-
-    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    @PrePersist
-    protected void onCreate() {
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = this.createdAt;
-        if (this.role == null || this.role.isBlank()) {
-            this.role = "研究人员";
-        }
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
-    }
-
-    public User() {}
-
-    public User(String username, String password) {
-        this.username = username;
-        this.password = password;
+    public static UserProfileResponse from(User user) {
+        UserProfileResponse response = new UserProfileResponse();
+        response.setId(user.getId());
+        response.setUsername(user.getUsername());
+        response.setNickname(user.getNickname());
+        response.setPhone(user.getPhone());
+        response.setOrganization(user.getOrganization());
+        response.setRole(user.getRole());
+        response.setCreatedAt(user.getCreatedAt());
+        response.setUpdatedAt(user.getUpdatedAt());
+        return response;
     }
 
     public Long getId() { return id; }
@@ -61,9 +33,6 @@ public class User {
 
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
-
-    public String getPassword() { return password; }
-    public void setPassword(String password) { this.password = password; }
 
     public String getNickname() { return nickname; }
     public void setNickname(String nickname) { this.nickname = nickname; }

@@ -25,7 +25,7 @@ function trimTrailingSlash(value: string | undefined) {
 }
 
 export const appConfig = {
-  apiBaseUrl: trimTrailingSlash(readEnv('EXPO_PUBLIC_API_BASE_URL')) || 'http://localhost:8080',
+  apiBaseUrl: trimTrailingSlash(readEnv('EXPO_PUBLIC_API_BASE_URL')),
   requestTimeoutMs: readNumber(readEnv('EXPO_PUBLIC_REQUEST_TIMEOUT_MS'), 15000),
   recognitionTimeoutMs: readNumber(readEnv('EXPO_PUBLIC_RECOGNITION_TIMEOUT_MS'), 30000),
   mockWhenApiUnavailable: readBoolean(readEnv('EXPO_PUBLIC_MOCK_WHEN_API_UNAVAILABLE'), true),

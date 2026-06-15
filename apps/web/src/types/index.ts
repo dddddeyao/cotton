@@ -31,6 +31,14 @@ export type UserSession = {
   token: string;
 };
 
+export type UserProfile = {
+  username: string;
+  nickname: string;
+  phone: string;
+  organization: string;
+  role: string;
+};
+
 export type ApiResponse<T> = {
   code: number;
   message: string;

@@ -37,10 +37,17 @@ cp .env.example .env
 MYSQL_PASSWORD
 MYSQL_ROOT_PASSWORD
 JWT_SECRET
+PYTHON_SERVICE_CONNECT_TIMEOUT_MS
+PYTHON_SERVICE_READ_TIMEOUT_MS
+APP_UPLOAD_DIR
 APP_CORS_ALLOWED_ORIGINS
+APP_CORS_ALLOW_CREDENTIALS
 ```
 
 `JWT_SECRET` 必须是 Base64 编码的 HMAC 密钥。可以在本机生成后写入 `.env`。
+项目使用 Bearer Token 认证，默认不需要跨域携带 Cookie，`APP_CORS_ALLOW_CREDENTIALS` 建议保持 `false`。
+模型推理可能较慢，`PYTHON_SERVICE_READ_TIMEOUT_MS` 默认 180000 毫秒，可按服务器性能调整。
+识别上传图片会保存到 `APP_UPLOAD_DIR`，Docker 默认是 `/app/uploads`，并由 `backend_uploads` 数据卷持久化。
 
 ## 单机 Docker 部署
 
@@ -59,11 +66,14 @@ docker compose logs -f backend
 docker compose logs -f model-service
 ```
 
+`docker compose ps` 中 `mysql`、`model-service`、`backend` 应显示 healthy 后，Web 才会对外提供完整服务。
+
 访问地址：
 
 ```text
 Web 页面：http://服务器IP/
 健康检查：http://服务器IP/api/health
+上传图片：http://服务器IP/api/uploads/{filename}
 ```
 
 如果绑定域名，例如 `https://cotton.example.com`：
@@ -112,6 +122,7 @@ VITE_MOCK_WHEN_API_UNAVAILABLE=false
 http://backend:8080/auth/login
 http://backend:8080/news
 http://backend:8080/recognition
+http://backend:8080/uploads/xxx.jpg
 ```
 
 因此前端生产环境 API 地址统一写 `/api`。
@@ -133,6 +144,17 @@ http://backend:8080/recognition
 2. 确认 .env 中数据库账号密码一致。
 3. 打开 http://服务器IP/api/health 验证后端是否可达。
 ```
+
+账号相关接口依赖登录 token：
+
+```text
+POST /api/auth/change-password
+GET  /api/user/profile
+PUT  /api/user/profile
+DELETE /api/recognition/history  body: { "ids": [1, 2] }
+```
+
+前端会通过 `Authorization: Bearer <token>` 自动携带登录状态。
 
 如果 Android 真机无法访问：
 

@@ -10,12 +10,12 @@ import { NewsItem } from '../types';
 export function NewsScreen({ news }: { news: NewsItem[] }) {
   const [query, setQuery] = useState('');
   const filteredNews = useMemo(() => {
-    const normalized = query.trim();
+    const normalized = query.trim().toLowerCase();
     if (!normalized) {
       return news;
     }
 
-    return news.filter((item) => `${item.title}${item.summary}${item.source}`.includes(normalized));
+    return news.filter((item) => `${item.title}${item.summary}${item.source}`.toLowerCase().includes(normalized));
   }, [news, query]);
 
   return (

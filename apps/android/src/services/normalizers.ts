@@ -1,5 +1,6 @@
+import { appConfig } from '../config';
 import { createMockRecognitionResult } from '../data/mockData';
-import { NewsItem, RecognitionMetric, RecognitionResult, UserSession } from '../types';
+import { NewsItem, RecognitionMetric, RecognitionResult, UserProfile, UserSession } from '../types';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -34,7 +35,24 @@ function numberValue(value: unknown, fallback = 0) {
 
 function normalizeConfidence(value: unknown) {
   const parsed = numberValue(value, 0.9);
-  return parsed > 1 ? parsed / 100 : parsed;
+  const normalized = parsed > 1 ? parsed / 100 : parsed;
+  return Math.max(0, Math.min(1, normalized));
+}
+
+function resolveImageUri(value: string) {
+  if (!value || /^[a-z][a-z0-9+.-]*:/i.test(value)) {
+    return value;
+  }
+
+  if (value.startsWith('/')) {
+    const baseUrl = appConfig.apiBaseUrl;
+    if (!baseUrl || value === baseUrl || value.startsWith(`${baseUrl}/`)) {
+      return value;
+    }
+    return `${baseUrl}${value}`;
+  }
+
+  return value;
 }
 
 function normalizeMetric(item: unknown): RecognitionMetric | null {
@@ -84,13 +102,18 @@ function pickRecognitionPayload(payload: unknown): AnyRecord {
 }
 
 export function normalizeNewsList(payload: unknown): NewsItem[] {
+  const record = isRecord(payload) ? payload : {};
   const list = Array.isArray(payload)
     ? payload
-    : isRecord(payload) && Array.isArray(payload.list)
-      ? payload.list
-      : isRecord(payload) && Array.isArray(payload.records)
-        ? payload.records
-        : [];
+    : Array.isArray(record.list)
+      ? record.list
+      : Array.isArray(record.records)
+        ? record.records
+        : Array.isArray(record.data)
+          ? record.data
+          : Array.isArray(record.items)
+            ? record.items
+            : [];
 
   return list.map((item, index) => {
     const record = isRecord(item) ? item : {};
@@ -129,7 +152,10 @@ export function normalizeRecognitionResult(payload: unknown, imageUri: string): 
   return {
     ...mock,
     id: stringValue(raw.id ?? raw.recordId, mock.id),
-    imageUri: stringValue(raw.imageUri ?? raw.imageUrl ?? raw.url, imageUri),
+    imageUri: resolveImageUri(stringValue(
+      raw.imageUri ?? raw.imageUrl ?? raw.url ?? raw.cottonAreaImage ?? raw.impurityAreaImage,
+      imageUri,
+    )),
     createdAt: stringValue(raw.createdAt ?? raw.time ?? raw.recognitionTime, mock.createdAt),
     grade: grade || mock.grade,
     confidence: normalizeConfidence(raw.confidence ?? raw.score ?? raw.probability),
@@ -140,13 +166,18 @@ export function normalizeRecognitionResult(payload: unknown, imageUri: string): 
 }
 
 export function normalizeRecognitionHistory(payload: unknown): RecognitionResult[] {
+  const record = isRecord(payload) ? payload : {};
   const list = Array.isArray(payload)
     ? payload
-    : isRecord(payload) && Array.isArray(payload.list)
-      ? payload.list
-      : isRecord(payload) && Array.isArray(payload.records)
-        ? payload.records
-        : [];
+    : Array.isArray(record.list)
+      ? record.list
+      : Array.isArray(record.records)
+        ? record.records
+        : Array.isArray(record.data)
+          ? record.data
+          : Array.isArray(record.items)
+            ? record.items
+            : [];
 
   return list.map((item, index) => {
     const imageUri = isRecord(item) ? stringValue(item.imageUri ?? item.imageUrl ?? item.url) : '';
@@ -157,4 +188,15 @@ export function normalizeRecognitionHistory(payload: unknown): RecognitionResult
       isLocal: false,
     };
   });
+}
+
+export function normalizeProfile(payload: unknown, username: string): UserProfile {
+  const record = isRecord(payload) ? payload : {};
+  return {
+    username: stringValue(record.username ?? record.userName ?? record.account, username),
+    nickname: stringValue(record.nickname ?? record.name),
+    phone: stringValue(record.phone ?? record.mobile),
+    organization: stringValue(record.organization ?? record.company ?? record.department),
+    role: stringValue(record.role ?? record.identity, '研究人员'),
+  };
 }

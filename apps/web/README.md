@@ -34,7 +34,7 @@ npm.cmd run build
 - `/recognition/result`：单样本识别报告、指标摘要、复制摘要
 - `/recognition/history`：识别记录、全选删除、统计摘要
 - `/profile`：登录/注册、账号状态、功能入口
-- `/profile/edit`：本地资料编辑与持久化
+- `/profile/edit`：账号资料编辑、后端同步、本地缓存兜底
 - `/profile/settings`：缓存状态、修改密码校验、清理缓存、退出登录
 
 ## 后端接入
@@ -42,8 +42,16 @@ npm.cmd run build
 复制 `.env.example` 为 `.env.local`，按需填写后端地址：
 
 ```bash
-VITE_API_BASE_URL=https://api.example.com
+# 留空时使用 mock 数据：
+VITE_API_BASE_URL=
 VITE_MOCK_WHEN_API_UNAVAILABLE=true
+
+# Docker/Nginx 同域部署推荐：
+VITE_API_BASE_URL=/api
+VITE_MOCK_WHEN_API_UNAVAILABLE=false
+
+# 本地开发直连后端可改为：
+# VITE_API_BASE_URL=http://localhost:8080
 VITE_RECOGNITION_UPLOAD_FIELD_NAME=file
 ```
 
@@ -62,6 +70,6 @@ VITE_RECOGNITION_UPLOAD_FIELD_NAME=file
 - `news_cache`：新闻缓存
 - `history_cache`：识别历史
 - `session_cache`：登录会话
-- `profile_cache_{username}`：本地资料
+- `profile_cache_{username}`：账号资料缓存，用于后端不可用时兜底展示
 
-设置页的“清理缓存”只清除新闻缓存和识别历史，保留登录会话与本地资料。
+设置页的“清理缓存”只清除新闻缓存和识别历史，保留登录会话与账号资料缓存。

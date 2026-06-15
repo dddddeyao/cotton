@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Bookmark,
@@ -18,12 +18,18 @@ import {
 import { useApp } from '../context/useApp';
 import { api } from '../api';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
+import { appConfig } from '../config';
 
 type ProfileCache = {
   nickname?: string;
   phone?: string;
   organization?: string;
   role?: string;
+};
+
+type ProfileState = {
+  username?: string;
+  data: ProfileCache;
 };
 
 function readProfileCache(username?: string): ProfileCache {
@@ -47,7 +53,34 @@ export default function ProfilePage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const profile = readProfileCache(session?.username);
+  const [profile, setProfile] = useState<ProfileState>(() => ({
+    username: session?.username,
+    data: readProfileCache(session?.username),
+  }));
+  const cachedProfile = session?.username ? readProfileCache(session.username) : {};
+
+  useEffect(() => {
+    if (!session) return;
+
+    let active = true;
+    api.fetchProfile(session)
+      .then((remoteProfile) => {
+        if (!active) return;
+        const nextProfile = {
+          nickname: remoteProfile.nickname,
+          phone: remoteProfile.phone,
+          organization: remoteProfile.organization,
+          role: remoteProfile.role,
+        };
+        setProfile({ username: session.username, data: nextProfile });
+        localStorage.setItem(`profile_cache_${session.username}`, JSON.stringify(nextProfile));
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, [session]);
 
   const switchMode = (m: 'login' | 'register') => {
     setMode(m);
@@ -58,7 +91,9 @@ export default function ProfilePage() {
 
   const handleSubmit = async () => {
     setMessage('');
-    if (!username || !password) {
+    const normalizedUsername = username.trim();
+
+    if (!normalizedUsername || !password) {
       setMessage('请填写完整信息');
       return;
     }
@@ -70,15 +105,15 @@ export default function ProfilePage() {
     try {
       const result =
         mode === 'login'
-          ? await api.login(username, password)
-          : await api.register(username, password);
+          ? await api.login(normalizedUsername, password)
+          : await api.register(normalizedUsername, password);
       setSession(result);
       setUsername('');
       setPassword('');
       setConfirmPassword('');
       setMessage('');
-    } catch {
-      setMessage(mode === 'login' ? '登录失败' : '注册失败');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : mode === 'login' ? '登录失败' : '注册失败');
     } finally {
       setLoading(false);
     }
@@ -95,6 +130,10 @@ export default function ProfilePage() {
     { label: '我的收藏', path: '/profile/collection', icon: Bookmark },
     { label: '应用设置', path: '/profile/settings', icon: Settings },
   ];
+  const dataMode = appConfig.apiBaseUrl ? 'API' : 'Mock';
+  const visibleProfile = session
+    ? { ...cachedProfile, ...(profile.username === session.username ? profile.data : {}) }
+    : {};
 
   return (
     <div className="grid min-h-full gap-4 lg:grid-cols-[1.05fr_0.95fr]">
@@ -108,7 +147,7 @@ export default function ProfilePage() {
                   <span className="font-bold text-ink">已登录：{session.username}</span>
                 </div>
                 <p className="mt-2 text-sm leading-6 text-muted">
-                  {profile.nickname ? `${profile.nickname} 的研究工作台` : '棉花品质识别研究工作台'}
+                  {visibleProfile.nickname ? `${visibleProfile.nickname} 的研究工作台` : '棉花品质识别研究工作台'}
                 </p>
               </div>
               <button
@@ -123,9 +162,9 @@ export default function ProfilePage() {
 
             <div className="mt-4 grid gap-2 text-sm md:grid-cols-3">
               {[
-                { label: '昵称', value: profile.nickname || '未填写', icon: UserRound },
-                { label: '手机号', value: profile.phone || '未填写', icon: Phone },
-                { label: '身份', value: profile.role || '研究人员', icon: ShieldCheck },
+                { label: '昵称', value: visibleProfile.nickname || '未填写', icon: UserRound },
+                { label: '手机号', value: visibleProfile.phone || '未填写', icon: Phone },
+                { label: '身份', value: visibleProfile.role || '研究人员', icon: ShieldCheck },
               ].map((item) => (
                 <div key={item.label} className="rounded-lg border border-white/70 bg-white/60 p-3">
                   <div className="mb-1 flex items-center gap-1.5 text-xs text-muted">
@@ -233,7 +272,7 @@ export default function ProfilePage() {
           <div className="grid gap-2 text-sm md:grid-cols-2">
             {[
               '账号登录、注册与会话缓存',
-              '资料编辑、本地保存与后端预留',
+              '资料编辑、后端同步与本地兜底',
               '识别结果、历史记录与缓存清理',
               '手机浏览器底部导航与触控按钮',
             ].map((item) => (
@@ -259,7 +298,7 @@ export default function ProfilePage() {
             { label: '会话状态', value: session ? '已登录' : '待登录', icon: ShieldCheck },
             { label: '识别入口', value: '拍照/相册', icon: ScanSearch },
             { label: '缓存策略', value: '本地可用', icon: Database },
-            { label: '接口模式', value: 'Mock/API', icon: ServerCog },
+            { label: '接口模式', value: dataMode, icon: ServerCog },
           ].map((item) => (
             <div key={item.label} className="rounded-lg border border-line bg-background/70 p-3">
               <div className="mb-2 flex items-center gap-2 text-xs text-muted">
