@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { SecondaryButton, StackPage } from '../components/common';
@@ -15,6 +15,9 @@ export function RecognitionResultScreen({
   onBack: () => void;
   onRetry: () => void;
 }) {
+  const metrics = result.metrics || [];
+  const details = result.details?.length ? result.details : metrics;
+
   return (
     <StackPage title="识别结果" onBack={onBack}>
       <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
@@ -32,11 +35,20 @@ export function RecognitionResultScreen({
         </View>
         <Text style={styles.resultConclusion}>{result.conclusion}</Text>
         <View style={styles.metricGrid}>
-          {result.metrics.map((metric) => (
+          {metrics.map((metric) => (
             <View key={metric.label} style={styles.metricCard}>
               <Text style={styles.metricLabel}>{metric.label}</Text>
               <Text style={styles.metricValue}>{metric.value}</Text>
               {metric.hint ? <Text style={styles.metricHint}>{metric.hint}</Text> : null}
+            </View>
+          ))}
+        </View>
+        <View style={styles.detailSection}>
+          <Text style={styles.detailTitle}>完整返回数据</Text>
+          {details.map((detail) => (
+            <View key={detail.label} style={styles.detailRow}>
+              <Text style={styles.detailLabel}>{detail.label}</Text>
+              <Text style={styles.detailValue}>{detail.value}</Text>
             </View>
           ))}
         </View>
@@ -135,4 +147,41 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginTop: 6,
   },
+  detailSection: {
+    marginTop: 18,
+    borderRadius: spacing.radius,
+    backgroundColor: colors.surfaceStrong,
+    borderWidth: 1,
+    borderColor: colors.line,
+    overflow: 'hidden',
+  },
+  detailTitle: {
+    color: colors.ink,
+    fontSize: 16,
+    fontWeight: '900',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: '#f3edf8',
+  },
+  detailRow: {
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  detailLabel: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  detailValue: {
+    color: colors.ink,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 3,
+  },
 });
+
+
+
+

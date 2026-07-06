@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+﻿import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -25,7 +25,7 @@ export function StackPage({
           onPress={handleBack}
           accessibilityRole="button"
           accessibilityLabel="返回"
-          android_ripple={{ color: '#e7deef', borderless: true }}
+          android_ripple={{ color: '#d7e3ec', borderless: true }}
           hitSlop={{ top: 16, right: 16, bottom: 16, left: 16 }}
         >
           <Ionicons name="chevron-back" size={30} color={colors.ink} />
@@ -139,9 +139,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 10,
-    backgroundColor: 'rgba(255, 251, 255, 0.9)',
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
     borderBottomWidth: 1,
-    borderBottomColor: '#eee4f6',
+    borderBottomColor: colors.line,
   },
   backButton: {
     width: 44,
@@ -187,14 +187,14 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     minHeight: 50,
-    borderRadius: 25,
+    borderRadius: spacing.radius,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
   primaryButtonDisabled: {
-    backgroundColor: '#aebfea',
+    backgroundColor: '#a9bdca',
   },
   primaryButtonText: {
     color: '#ffffff',
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     minHeight: 50,
-    borderRadius: 25,
+    borderRadius: spacing.radius,
     borderWidth: 1,
     borderColor: colors.primary,
     alignItems: 'center',
@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
   },
   tableCell: {
     flex: 1,
-    color: '#4d4858',
+    color: '#344756',
     fontSize: 13,
     lineHeight: 18,
     paddingHorizontal: 8,
@@ -286,3 +286,5 @@ const styles = StyleSheet.create({
     color: colors.danger,
   },
 });
+
+

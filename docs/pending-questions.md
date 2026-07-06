@@ -6,7 +6,7 @@
 1. 后端技术栈：Spring Boot 3.1 + MySQL + JWT；模型服务为 Flask + PyTorch。
 2. 后端项目路径：services/backend。
 3. 本地后端默认地址：http://localhost:8080。
-4. Docker Web 生产入口：浏览器访问 Web/Nginx，API 通过 /api 反向代理到后端。
+4. Docker 生产入口：Android 端直接访问 Spring Boot 后端 API。
 5. 登录响应字段：统一响应 data.username 与 data.token，前端也兼容 accessToken/jwt。
 6. token 请求头：Authorization: Bearer <token>。
 7. 注册字段：username/password。
@@ -16,7 +16,7 @@
 11. 识别接口：POST /recognition；兼容旧入口 POST /api/v1/upload。
 12. 识别记录：GET /recognition/history，需要登录。
 13. 删除识别记录：DELETE /recognition/history，支持批量 body: { ids: number[] }。
-14. 历史记录点击详情：Web 与 Android 均支持。
+14. 历史记录点击详情：Android 支持。
 ```
 
 ## 仍待业务确认

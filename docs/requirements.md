@@ -314,7 +314,6 @@ Word 文档内容
 
 ```text
 Android 前端：apps/android
-Web 前端：apps/web
 后端服务：services/backend
 Python 模型服务：services/backend/model-service-python
 共享素材：assets

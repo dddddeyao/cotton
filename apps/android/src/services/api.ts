@@ -1,4 +1,4 @@
-import { appConfig } from '../config';
+﻿import { appConfig } from '../config';
 import { createMockRecognitionResult, mockNews } from '../data/mockData';
 import { cache } from '../storage/cache';
 import { NewsItem, RecognitionResult, UserProfile, UserSession } from '../types';
@@ -55,6 +55,15 @@ function createImageFormData(imageUri: string) {
   return formData;
 }
 
+function createImageBase64Body(imageUri: string, imageBase64: string) {
+  const fileName = getFileNameFromUri(imageUri);
+
+  return JSON.stringify({
+    imageBase64,
+    filename: fileName,
+    contentType: guessMimeType(fileName),
+  });
+}
 function createLocalProfile(
   username: string,
   profile: Partial<Omit<UserProfile, 'username'>> = {}
@@ -227,18 +236,25 @@ export const api = {
     }
   },
 
-  async recognizeImage(imageUri: string, token?: string): Promise<RecognitionResult> {
+  async recognizeImage(imageUri: string, token?: string, imageBase64?: string): Promise<RecognitionResult> {
     if (!imageUri) {
       throw new Error('请先选择图片');
     }
 
     try {
-      const payload = await requestJson<unknown>(appConfig.endpoints.recognition, {
-        method: 'POST',
-        body: createImageFormData(imageUri),
-        token,
-        timeoutMs: appConfig.recognitionTimeoutMs,
-      });
+      const payload = imageBase64
+        ? await requestJson<unknown>(appConfig.endpoints.recognitionBase64, {
+            method: 'POST',
+            body: createImageBase64Body(imageUri, imageBase64),
+            token,
+            timeoutMs: appConfig.recognitionTimeoutMs,
+          })
+        : await requestJson<unknown>(appConfig.endpoints.recognition, {
+            method: 'POST',
+            body: createImageFormData(imageUri),
+            token,
+            timeoutMs: appConfig.recognitionTimeoutMs,
+          });
 
       return normalizeRecognitionResult(payload, imageUri);
     } catch (error) {
@@ -287,3 +303,5 @@ export const api = {
     }
   },
 };
+
+

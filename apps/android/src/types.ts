@@ -1,4 +1,4 @@
-export type TabKey = 'news' | 'standards' | 'recognition' | 'profile';
+﻿export type TabKey = 'news' | 'standards' | 'recognition' | 'profile';
 
 export type NewsItem = {
   id: string;
@@ -15,13 +15,29 @@ export type RecognitionMetric = {
   hint?: string;
 };
 
+export type DetectionResult = {
+  colorGrade: number | null;
+  impurityGrade: number | null;
+  cottonArea: number | null;
+  impurityArea: number | null;
+  areaRatio: number | null;
+  confidence: number | null;
+};
+
 export type RecognitionResult = {
   id: string;
   imageUri: string;
   createdAt: string;
   grade: string;
   confidence: number;
+  label: string;
+  timestamp: string;
+  filename: string;
+  cottonAreaImage: string | null;
+  impurityAreaImage: string | null;
+  detectionResult: DetectionResult;
   metrics: RecognitionMetric[];
+  details: RecognitionMetric[];
   conclusion: string;
   isLocal: boolean;
 };
@@ -49,3 +65,4 @@ export type AppView =
   | { name: 'collection' }
   | { name: 'settings' }
   | { name: 'agreement'; kind: 'user' | 'privacy' };
+

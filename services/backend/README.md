@@ -87,6 +87,6 @@ cd services/backend
 ## 注意事项
 
 - 识别上传图片会保存到 `APP_UPLOAD_DIR`，默认本地目录为 `uploads/`；Docker 部署时挂载到 `/app/uploads`。
-- 识别记录中的 `imageUri` 会返回 `/uploads/{filename}`，Web/Nginx 部署下前端会通过 `/api/uploads/{filename}` 访问。
+- 识别记录中的 `imageUri` 会返回 `/uploads/{filename}`，Android 端按后端基础地址拼接访问。
 - `target/`、`.idea/`、`uploads/` 为本地构建或运行产物，不应提交。
 - `*.pth` 模型权重文件体积较大，不应提交到 Git，可通过本地文件、对象存储或发布包单独交付。

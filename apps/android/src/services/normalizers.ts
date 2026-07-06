@@ -1,6 +1,6 @@
-import { appConfig } from '../config';
+﻿import { appConfig } from '../config';
 import { createMockRecognitionResult } from '../data/mockData';
-import { NewsItem, RecognitionMetric, RecognitionResult, UserProfile, UserSession } from '../types';
+import { DetectionResult, NewsItem, RecognitionMetric, RecognitionResult, UserProfile, UserSession } from '../types';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -20,6 +20,11 @@ function stringValue(value: unknown, fallback = '') {
   return fallback;
 }
 
+function nullableString(value: unknown) {
+  const parsed = stringValue(value);
+  return parsed || null;
+}
+
 function numberValue(value: unknown, fallback = 0) {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
@@ -31,6 +36,19 @@ function numberValue(value: unknown, fallback = 0) {
   }
 
   return fallback;
+}
+
+function nullableNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
 }
 
 function normalizeConfidence(value: unknown) {
@@ -74,20 +92,81 @@ function normalizeMetric(item: unknown): RecognitionMetric | null {
   };
 }
 
-function buildMetrics(raw: AnyRecord): RecognitionMetric[] {
+function displayValue(value: unknown, suffix = '') {
+  if (value === null || value === undefined || value === '') {
+    return '未返回';
+  }
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return `${Number.isInteger(value) ? value : Number(value.toFixed(6))}${suffix}`;
+  }
+
+  return `${String(value)}${suffix}`;
+}
+
+function displayPercentRatio(value: unknown) {
+  const parsed = nullableNumber(value);
+  if (parsed === null) {
+    return '未返回';
+  }
+
+  return `${Number((parsed * 100).toFixed(4))}%`;
+}
+
+function displayConfidence(value: unknown) {
+  const normalized = normalizeConfidence(value);
+  return `${Math.round(normalized * 10000) / 100}%`;
+}
+
+function normalizeDetectionResult(raw: AnyRecord): DetectionResult {
+  return {
+    colorGrade: nullableNumber(raw.colorGrade ?? raw.colorLevel),
+    impurityGrade: nullableNumber(raw.impurityGrade ?? raw.leafGrade ?? raw.leafLevel),
+    cottonArea: nullableNumber(raw.cottonArea),
+    impurityArea: nullableNumber(raw.impurityArea ?? raw.trashArea ?? raw.leafArea),
+    areaRatio: nullableNumber(raw.areaRatio),
+    confidence: nullableNumber(raw.confidence ?? raw.score ?? raw.probability),
+  };
+}
+
+function buildModelMetrics(detection: DetectionResult): RecognitionMetric[] {
+  return [
+    { label: '颜色等级', value: displayValue(detection.colorGrade), hint: 'colorGrade' },
+    { label: '杂质等级', value: displayValue(detection.impurityGrade), hint: 'impurityGrade' },
+    { label: '棉花区域占比', value: displayValue(detection.cottonArea, '%'), hint: 'cottonArea' },
+    { label: '杂质面积', value: displayValue(detection.impurityArea, ' px'), hint: 'impurityArea' },
+    { label: '杂质面积比', value: displayPercentRatio(detection.areaRatio), hint: 'areaRatio' },
+    { label: '模型置信度', value: displayConfidence(detection.confidence), hint: 'confidence' },
+  ];
+}
+
+function buildDetails(raw: AnyRecord, detection: DetectionResult, imageUri: string): RecognitionMetric[] {
+  return [
+    { label: '记录 ID', value: displayValue(raw.id ?? raw.recordId) },
+    { label: '图片地址', value: displayValue(imageUri) },
+    { label: '颜色等级 colorGrade', value: displayValue(detection.colorGrade) },
+    { label: '杂质等级 impurityGrade', value: displayValue(detection.impurityGrade) },
+    { label: '棉花区域 cottonArea', value: displayValue(detection.cottonArea, '%') },
+    { label: '杂质面积 impurityArea', value: displayValue(detection.impurityArea, ' px') },
+    { label: '面积比 areaRatio', value: displayValue(detection.areaRatio) },
+    { label: '置信度 confidence', value: displayValue(detection.confidence) },
+    { label: '兼容标签 label', value: displayValue(raw.label) },
+    { label: '创建时间 createdAt', value: displayValue(raw.createdAt) },
+    { label: '识别时间 timestamp', value: displayValue(raw.timestamp) },
+    { label: '文件名 filename', value: displayValue(raw.filename) },
+    { label: '结论 conclusion', value: displayValue(raw.conclusion) },
+    { label: '棉花区域图 cottonAreaImage', value: displayValue(raw.cottonAreaImage) },
+    { label: '杂质掩模图 impurityAreaImage', value: displayValue(raw.impurityAreaImage) },
+  ];
+}
+
+function buildMetrics(raw: AnyRecord, detection: DetectionResult): RecognitionMetric[] {
   const rawMetrics = raw.metrics ?? raw.parameters ?? raw.items;
   const metrics = Array.isArray(rawMetrics)
     ? rawMetrics.map(normalizeMetric).filter((item): item is RecognitionMetric => Boolean(item))
     : [];
 
-  const knownMetrics: RecognitionMetric[] = [
-    { label: '反射率 Rd', value: stringValue(raw.reflectance ?? raw.rd) },
-    { label: '黄度 +b', value: stringValue(raw.yellowness ?? raw.bValue ?? raw.plusB) },
-    { label: '杂质面积', value: stringValue(raw.impurityArea ?? raw.trashArea ?? raw.leafArea) },
-    { label: '叶屑等级', value: stringValue(raw.leafGrade ?? raw.leafLevel) },
-  ].filter((item) => item.value);
-
-  return metrics.length > 0 ? metrics : knownMetrics;
+  return metrics.length > 0 ? metrics : buildModelMetrics(detection);
 }
 
 function pickRecognitionPayload(payload: unknown): AnyRecord {
@@ -144,23 +223,32 @@ export function normalizeSession(payload: unknown, fallbackUsername: string): Us
 export function normalizeRecognitionResult(payload: unknown, imageUri: string): RecognitionResult {
   const raw = pickRecognitionPayload(payload);
   const mock = createMockRecognitionResult(imageUri);
-  const metrics = buildMetrics(raw);
+  const detectionResult = normalizeDetectionResult(raw);
+  const metrics = buildMetrics(raw, detectionResult);
   const colorGrade = stringValue(raw.colorGrade ?? raw.colorLevel);
-  const leafGrade = stringValue(raw.leafGrade ?? raw.leafLevel);
-  const grade = stringValue(raw.grade ?? raw.level ?? raw.resultText, [colorGrade, leafGrade].filter(Boolean).join(' / '));
+  const impurityGrade = stringValue(raw.impurityGrade ?? raw.leafGrade ?? raw.leafLevel);
+  const grade = stringValue(raw.grade ?? raw.level ?? raw.resultText, [colorGrade, impurityGrade].filter(Boolean).join(' / '));
+  const resolvedImageUri = resolveImageUri(stringValue(
+    raw.imageUri ?? raw.imageUrl ?? raw.url ?? raw.cottonAreaImage ?? raw.impurityAreaImage,
+    imageUri,
+  ));
 
   return {
     ...mock,
     id: stringValue(raw.id ?? raw.recordId, mock.id),
-    imageUri: resolveImageUri(stringValue(
-      raw.imageUri ?? raw.imageUrl ?? raw.url ?? raw.cottonAreaImage ?? raw.impurityAreaImage,
-      imageUri,
-    )),
-    createdAt: stringValue(raw.createdAt ?? raw.time ?? raw.recognitionTime, mock.createdAt),
+    imageUri: resolvedImageUri,
+    createdAt: stringValue(raw.createdAt ?? raw.time ?? raw.recognitionTime ?? raw.timestamp, mock.createdAt),
     grade: grade || mock.grade,
-    confidence: normalizeConfidence(raw.confidence ?? raw.score ?? raw.probability),
-    metrics: metrics.length > 0 ? metrics : mock.metrics,
-    conclusion: stringValue(raw.conclusion ?? raw.message ?? raw.remark, mock.conclusion),
+    confidence: normalizeConfidence(raw.confidence ?? raw.score ?? raw.probability ?? detectionResult.confidence),
+    label: stringValue(raw.label, colorGrade || mock.label),
+    timestamp: stringValue(raw.timestamp, stringValue(raw.createdAt, mock.timestamp)),
+    filename: stringValue(raw.filename, mock.filename),
+    cottonAreaImage: nullableString(raw.cottonAreaImage),
+    impurityAreaImage: nullableString(raw.impurityAreaImage),
+    detectionResult,
+    metrics,
+    details: buildDetails(raw, detectionResult, resolvedImageUri),
+    conclusion: stringValue(raw.conclusion ?? raw.message ?? raw.remark, grade ? `等级 ${grade}` : mock.conclusion),
     isLocal: false,
   };
 }

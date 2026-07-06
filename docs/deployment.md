@@ -1,6 +1,6 @@
 # 部署说明
 
-目标部署形态：公网只暴露 Web/Nginx，Web 负责静态页面访问，并把 `/api/*` 反向代理到后端；后端、MySQL、Python 模型服务运行在服务器内部 Docker 网络中。
+本文说明仅保留 Android App、Spring Boot 后端、MySQL 和 Python 模型服务后的部署方式。生产入口为 Spring Boot 后端 API，Android 端直接配置后端地址。
 
 ## 服务器要求
 
@@ -11,10 +11,10 @@
 内存：8GB 起，模型推理建议 16GB+
 磁盘：30GB 起，另需预留模型权重和 Docker 镜像空间
 软件：Docker、Docker Compose
-开放端口：80 或 443
+开放端口：8080 或自定义 BACKEND_PUBLIC_PORT
 ```
 
-如需 HTTPS，建议在服务器前面增加 Caddy、Nginx Proxy Manager、宝塔、云厂商负载均衡或自行配置 Nginx 证书。
+如果需要通过域名或 HTTPS 访问，可在后端前增加 Caddy、Nginx Proxy Manager、宝塔、云厂商负载均衡或自行配置反向代理证书。
 
 ## 准备文件
 
@@ -34,6 +34,7 @@ cp .env.example .env
 至少修改这些值：
 
 ```text
+BACKEND_PUBLIC_PORT
 MYSQL_PASSWORD
 MYSQL_ROOT_PASSWORD
 JWT_SECRET
@@ -44,10 +45,7 @@ APP_CORS_ALLOWED_ORIGINS
 APP_CORS_ALLOW_CREDENTIALS
 ```
 
-`JWT_SECRET` 必须是 Base64 编码的 HMAC 密钥。可以在本机生成后写入 `.env`。
-项目使用 Bearer Token 认证，默认不需要跨域携带 Cookie，`APP_CORS_ALLOW_CREDENTIALS` 建议保持 `false`。
-模型推理可能较慢，`PYTHON_SERVICE_READ_TIMEOUT_MS` 默认 180000 毫秒，可按服务器性能调整。
-识别上传图片会保存到 `APP_UPLOAD_DIR`，Docker 默认是 `/app/uploads`，并由 `backend_uploads` 数据卷持久化。
+`JWT_SECRET` 必须是 Base64 编码的 HMAC 密钥。项目使用 Bearer Token 认证，默认不需要跨域携带 Cookie，`APP_CORS_ALLOW_CREDENTIALS` 建议保持 `false`。模型推理可能较慢，`PYTHON_SERVICE_READ_TIMEOUT_MS` 默认 180000 毫秒，可按服务器性能调整。
 
 ## 单机 Docker 部署
 
@@ -57,31 +55,29 @@ APP_CORS_ALLOW_CREDENTIALS
 docker compose up -d --build
 ```
 
-查看状态：
+查看状态和日志：
 
 ```bash
 docker compose ps
-docker compose logs -f web
 docker compose logs -f backend
 docker compose logs -f model-service
 ```
 
-`docker compose ps` 中 `mysql`、`model-service`、`backend` 应显示 healthy 后，Web 才会对外提供完整服务。
+`docker compose ps` 中 `mysql`、`model-service`、`backend` 应显示 healthy。
 
 访问地址：
 
 ```text
-Web 页面：http://服务器IP/
-健康检查：http://服务器IP/api/health
-上传图片：http://服务器IP/api/uploads/{filename}
+后端 API：http://服务器IP:8080
+健康检查：http://服务器IP:8080/health
+上传图片：http://服务器IP:8080/uploads/{filename}
 ```
 
-如果绑定域名，例如 `https://cotton.example.com`：
+如果绑定域名并反向代理到后端，例如 `https://cotton.example.com`：
 
 ```text
-Web 页面：https://cotton.example.com/
-后端 API：https://cotton.example.com/api
-Android API 地址：https://cotton.example.com/api
+后端 API：https://cotton.example.com
+Android API 地址：https://cotton.example.com
 ```
 
 ## Android 公网配置
@@ -89,51 +85,26 @@ Android API 地址：https://cotton.example.com/api
 Android 打包前，在 `apps/android/.env.local` 中配置：
 
 ```text
-EXPO_PUBLIC_API_BASE_URL=https://cotton.example.com/api
+EXPO_PUBLIC_API_BASE_URL=http://服务器IP:8080
 EXPO_PUBLIC_MOCK_WHEN_API_UNAVAILABLE=false
 ```
 
-然后重新构建 APK。环境变量会在构建时注入，因此改地址后需要重新打包。
-
-## Web 公网配置
-
-Docker 部署默认使用：
+如果使用 HTTPS 域名：
 
 ```text
-WEB_API_BASE_URL=/api
-VITE_MOCK_WHEN_API_UNAVAILABLE=false
+EXPO_PUBLIC_API_BASE_URL=https://cotton.example.com
+EXPO_PUBLIC_MOCK_WHEN_API_UNAVAILABLE=false
 ```
 
-这样浏览器访问同一个域名即可调用后端，避免跨域和移动端 HTTP 地址不一致的问题。
-
-## 反向代理说明
-
-`apps/web/nginx.conf` 中的规则会把：
-
-```text
-/api/auth/login
-/api/news
-/api/recognition
-```
-
-转发为后端内部服务：
-
-```text
-http://backend:8080/auth/login
-http://backend:8080/news
-http://backend:8080/recognition
-http://backend:8080/uploads/xxx.jpg
-```
-
-因此前端生产环境 API 地址统一写 `/api`。
+环境变量会在构建时注入，因此改地址后需要重新打包 APK。
 
 ## 常见问题
 
-如果 Web 能打开但识别失败：
+如果识别失败：
 
 ```text
-1. 检查 model-service 容器是否启动。
-2. 检查两个 .pth 权重文件是否存在。
+1. 检查 model-service 容器是否启动并 healthy。
+2. 检查 cotton-best.pth 和 fenge_best.pth 是否存在。
 3. 查看 docker compose logs -f backend 和 docker compose logs -f model-service。
 ```
 
@@ -142,24 +113,22 @@ http://backend:8080/uploads/xxx.jpg
 ```text
 1. 检查 MySQL 容器是否正常。
 2. 确认 .env 中数据库账号密码一致。
-3. 打开 http://服务器IP/api/health 验证后端是否可达。
+3. 打开 http://服务器IP:8080/health 验证后端是否可达。
 ```
 
 账号相关接口依赖登录 token：
 
 ```text
-POST /api/auth/change-password
-GET  /api/user/profile
-PUT  /api/user/profile
-DELETE /api/recognition/history  body: { "ids": [1, 2] }
+POST /auth/change-password
+GET  /user/profile
+PUT  /user/profile
+DELETE /recognition/history  body: { "ids": [1, 2] }
 ```
-
-前端会通过 `Authorization: Bearer <token>` 自动携带登录状态。
 
 如果 Android 真机无法访问：
 
 ```text
-1. 确认 EXPO_PUBLIC_API_BASE_URL 使用公网域名或服务器 IP，不要使用 localhost。
+1. 确认 EXPO_PUBLIC_API_BASE_URL 使用公网域名、服务器 IP 或局域网 IP，不要使用 localhost。
 2. 如果使用 HTTPS，确保证书有效。
 3. 如果使用 HTTP，确认 Android 网络安全策略和服务器防火墙允许访问。
 ```

@@ -1,4 +1,4 @@
-import { appConfig } from '../config';
+﻿import { appConfig } from '../config';
 
 type RequestJsonOptions = {
   method?: string;
@@ -38,6 +38,10 @@ function buildUrl(path: string) {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
 
   return `${baseUrl}${normalizedPath}`;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error && error.message ? error.message : '';
 }
 
 function readEnvelopeMessage(payload: unknown) {
@@ -104,10 +108,12 @@ export async function requestJson<T>(path: string, options: RequestJsonOptions =
     headers.set('Content-Type', 'application/json');
   }
 
+  const requestUrl = buildUrl(path);
+
   try {
     let response: Response;
     try {
-      response = await fetch(buildUrl(path), {
+      response = await fetch(requestUrl, {
         method: options.method ?? 'GET',
         body: options.body as BodyInit | undefined,
         headers,
@@ -118,7 +124,8 @@ export async function requestJson<T>(path: string, options: RequestJsonOptions =
         throw new ApiNetworkError('请求超时，请稍后重试');
       }
 
-      throw new ApiNetworkError();
+      const detail = errorMessage(error);
+      throw new ApiNetworkError(detail ? `网络请求失败：${detail}（${requestUrl}）` : `网络请求失败（${requestUrl}）`);
     }
 
     const rawText = await response.text();

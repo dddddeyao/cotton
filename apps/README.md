@@ -5,7 +5,6 @@
 ```text
 apps/
   android/  # React Native / Expo Android 前端
-  web/      # React + Vite Web 前端
 ```
 
-两个前端都通过统一接口约定接入 `services/backend`，并保留 mock / 缓存兜底能力，便于在后端不可用时独立演示。
+Android 前端通过统一接口约定接入 `services/backend`，并保留 mock / 缓存兜底能力，便于在后端不可用时独立演示。

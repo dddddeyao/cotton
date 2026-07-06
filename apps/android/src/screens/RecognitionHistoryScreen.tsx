@@ -1,9 +1,18 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { EmptyState, StackPage } from '../components/common';
 import { colors, shadow, spacing } from '../theme';
-import { RecognitionResult } from '../types';
+import { RecognitionMetric, RecognitionResult } from '../types';
+
+function buildParameterCells(item: RecognitionResult): RecognitionMetric[] {
+  return [
+    { label: '识别等级', value: item.grade },
+    { label: '模型置信度', value: `${Math.round(item.confidence * 100)}%` },
+    { label: '采集时间', value: item.createdAt },
+    ...(item.metrics || []).slice(0, 6),
+  ];
+}
 
 export function RecognitionHistoryScreen({
   history,
@@ -35,19 +44,46 @@ export function RecognitionHistoryScreen({
         <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
           {history.map((item) => {
             const selected = selectedIds.includes(item.id);
+            const parameterCells = buildParameterCells(item);
+
             return (
-              <View key={item.id} style={styles.historyCard}>
-                <Pressable style={[styles.checkCircle, selected && styles.checkCircleActive]} onPress={() => toggle(item.id)}>
-                  <Text style={styles.checkText}>{selected ? '✓' : ''}</Text>
-                </Pressable>
-                <Pressable style={styles.historyOpenArea} onPress={() => onOpenResult(item)} accessibilityRole="button">
-                  <View style={styles.historyThumb}>
-                    {item.imageUri ? <Image source={{ uri: item.imageUri }} style={styles.historyImage} /> : <Text style={styles.historyThumbText}>AI</Text>}
+              <View key={item.id} style={[styles.historyCard, selected && styles.historyCardSelected]}>
+                <View style={styles.cardHeader}>
+                  <Pressable style={[styles.checkCircle, selected && styles.checkCircleActive]} onPress={() => toggle(item.id)}>
+                    <Text style={styles.checkText}>{selected ? '✓' : ''}</Text>
+                  </Pressable>
+                  <View style={styles.recordTitleBlock}>
+                    <Text style={styles.recordKicker}>RECOGNITION RECORD</Text>
+                    <Text style={styles.recordTitle}>样本参数记录</Text>
                   </View>
-                  <View style={styles.historyInfo}>
-                    <Text style={styles.historyTitle}>{item.grade}</Text>
-                    <Text style={styles.historyMeta}>{item.createdAt}</Text>
-                    <Text style={styles.historyMeta}>置信度 {Math.round(item.confidence * 100)}%</Text>
+                  <Pressable style={styles.openButton} onPress={() => onOpenResult(item)} accessibilityRole="button">
+                    <Text style={styles.openButtonText}>查看详情</Text>
+                  </Pressable>
+                </View>
+
+                <Pressable style={styles.recordBody} onPress={() => onOpenResult(item)} accessibilityRole="button">
+                  <View style={styles.historyThumb}>
+                    {item.imageUri ? (
+                      <Image source={{ uri: item.imageUri }} style={styles.historyImage} />
+                    ) : (
+                      <View style={styles.emptyThumbContent}>
+                        <Text style={styles.historyThumbText}>AI</Text>
+                        <Text style={styles.historyThumbSubText}>No image</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.parameterGrid}>
+                    {parameterCells.map((metric, index) => (
+                      <View key={`${metric.label}-${index}`} style={styles.parameterCell}>
+                        <Text style={styles.parameterLabel} numberOfLines={1}>
+                          {metric.label}
+                        </Text>
+                        <Text style={styles.parameterValue} numberOfLines={2}>
+                          {metric.value}
+                        </Text>
+                      </View>
+                    ))}
                   </View>
                 </Pressable>
               </View>
@@ -66,6 +102,7 @@ export function RecognitionHistoryScreen({
             </View>
             <Text style={styles.selectAllText}>全选</Text>
           </Pressable>
+          <Text style={styles.selectionText}>已选 {selectedIds.length} 项</Text>
           <Pressable
             style={[styles.deleteButton, (selectedIds.length === 0 || isDeleting) && styles.deleteButtonDisabled]}
             disabled={selectedIds.length === 0 || isDeleting}
@@ -91,37 +128,41 @@ export function RecognitionHistoryScreen({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   page: {
     padding: spacing.page,
-    paddingBottom: 96,
+    paddingBottom: 104,
   },
   historyCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
     borderRadius: spacing.radius,
     backgroundColor: colors.surface,
-    padding: 12,
-    marginBottom: 12,
+    padding: 14,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#efe5f7',
+    borderColor: colors.line,
     ...shadow,
   },
-  historyOpenArea: {
-    flex: 1,
+  historyCardSelected: {
+    borderColor: colors.primary,
+    backgroundColor: '#f8fbfd',
+  },
+  cardHeader: {
+    minHeight: 42,
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 12,
   },
   checkCircle: {
     width: 24,
     height: 24,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#bfb6cb',
+    borderColor: '#8ea0af',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
   },
   checkCircleActive: {
     backgroundColor: colors.primary,
@@ -132,47 +173,110 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '900',
   },
-  historyThumb: {
-    width: 62,
-    height: 62,
-    borderRadius: spacing.radius,
+  recordTitleBlock: {
+    flex: 1,
+  },
+  recordKicker: {
+    color: colors.muted,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0,
+  },
+  recordTitle: {
+    color: colors.ink,
+    fontSize: 16,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  openButton: {
+    minWidth: 76,
+    minHeight: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: '#b7cfdf',
+  },
+  openButtonText: {
+    color: colors.primaryDark,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  recordBody: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  historyThumb: {
+    width: 92,
+    minHeight: 132,
+    borderRadius: spacing.radius,
+    backgroundColor: '#dce8f1',
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#c3d2dd',
   },
   historyImage: {
     width: '100%',
     height: '100%',
+    resizeMode: 'cover',
+  },
+  emptyThumbContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   historyThumbText: {
-    color: colors.primary,
-    fontSize: 22,
+    color: colors.primaryDark,
+    fontSize: 24,
     fontWeight: '900',
   },
-  historyInfo: {
-    flex: 1,
-    marginLeft: 12,
+  historyThumbSubText: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 4,
   },
-  historyTitle: {
-    color: colors.ink,
-    fontSize: 17,
+  parameterGrid: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginLeft: 10,
+  },
+  parameterCell: {
+    width: '47.5%',
+    minHeight: 58,
+    borderRadius: spacing.radius,
+    backgroundColor: '#f5f8fb',
+    borderWidth: 1,
+    borderColor: colors.line,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    justifyContent: 'center',
+  },
+  parameterLabel: {
+    color: colors.muted,
+    fontSize: 11,
     fontWeight: '800',
   },
-  historyMeta: {
-    color: colors.muted,
-    fontSize: 13,
-    marginTop: 3,
+  parameterValue: {
+    color: colors.ink,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '900',
+    marginTop: 4,
   },
   actions: {
-    minHeight: 74,
+    minHeight: 76,
     borderTopWidth: 1,
-    borderTopColor: '#efe5f7',
-    backgroundColor: '#fff9ff',
+    borderTopColor: colors.line,
+    backgroundColor: colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 22,
+    paddingHorizontal: 18,
   },
   selectAll: {
     flexDirection: 'row',
@@ -180,22 +284,28 @@ const styles = StyleSheet.create({
   },
   selectAllText: {
     color: colors.ink,
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  selectionText: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: '800',
   },
   deleteButton: {
-    minWidth: 116,
-    minHeight: 44,
-    borderRadius: 22,
+    minWidth: 96,
+    minHeight: 42,
+    borderRadius: 21,
     backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
   },
   deleteButtonDisabled: {
-    backgroundColor: '#efb7aa',
+    backgroundColor: '#d8a6a1',
   },
   deleteButtonText: {
     color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '900',
   },
 });

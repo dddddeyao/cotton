@@ -1,7 +1,6 @@
 package com.example.springbootpythonml.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.time.LocalDateTime;
 
@@ -9,7 +8,6 @@ import java.time.LocalDateTime;
  * 图像识别结果 DTO（匹配 Flask 新结构 + 兼容旧字段）
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-@JsonInclude(JsonInclude.Include.NON_NULL)
 public class RecognitionResult {
 
     // ===== 新增：与 Flask 顶层字段对应 =====

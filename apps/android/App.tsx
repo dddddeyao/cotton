@@ -1,4 +1,4 @@
-import { StatusBar } from 'expo-status-bar';
+﻿import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, BackHandler, SafeAreaView, StyleSheet } from 'react-native';
@@ -14,11 +14,19 @@ import { ProfileScreen } from './src/screens/ProfileScreen';
 import { EditProfileScreen } from './src/screens/EditProfileScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { SimplePage } from './src/screens/SimplePage';
+import { appConfig } from './src/config';
 import { api } from './src/services/api';
 import { cache } from './src/storage/cache';
 import { colors } from './src/theme';
 import { AppView, NewsItem, RecognitionResult, TabKey, UserSession } from './src/types';
+function getErrorMessage(error: unknown) {
+  return error instanceof Error && error.message ? error.message : '请检查网络后重试。';
+}
 
+function imageUriScheme(uri: string) {
+  const separatorIndex = uri.indexOf(':');
+  return separatorIndex > 0 ? uri.slice(0, separatorIndex) : 'unknown';
+}
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('news');
   const [view, setView] = useState<AppView>({ name: 'tabs' });
@@ -26,6 +34,7 @@ export default function App() {
   const [history, setHistory] = useState<RecognitionResult[]>(mockRecognitionHistory);
   const [session, setSession] = useState<UserSession | null>(null);
   const [selectedImageUri, setSelectedImageUri] = useState('');
+  const [selectedImageBase64, setSelectedImageBase64] = useState('');
   const [isRecognizing, setIsRecognizing] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -165,15 +174,18 @@ export default function App() {
         ? await ImagePicker.launchCameraAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             quality: 0.85,
+            base64: true,
           })
         : await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsMultipleSelection: false,
             quality: 0.9,
+            base64: true,
           });
 
     if (!result.canceled && result.assets[0]?.uri) {
       setSelectedImageUri(result.assets[0].uri);
+      setSelectedImageBase64(result.assets[0].base64 ?? '');
       setActiveTab('recognition');
       setView({ name: 'tabs' });
     }
@@ -187,16 +199,24 @@ export default function App() {
 
     try {
       setIsRecognizing(true);
-      const result = await api.recognizeImage(selectedImageUri, session?.token);
+      const result = await api.recognizeImage(selectedImageUri, session?.token, selectedImageBase64);
       const nextHistory = [result, ...history];
       saveHistory(nextHistory);
       setView({ name: 'recognitionResult', result });
     } catch (error) {
-      Alert.alert('识别失败', error instanceof Error ? error.message : '请检查网络后重试。');
+      Alert.alert(
+        '识别失败',
+        [
+          getErrorMessage(error),
+          `接口：${appConfig.apiBaseUrl}${appConfig.endpoints.recognition}`,
+          `图片来源：${imageUriScheme(selectedImageUri)}`,
+          `登录状态：${session?.token ? '已登录' : '未登录'}`,
+        ].join('\n'),
+      );
     } finally {
       setIsRecognizing(false);
     }
-  }, [history, saveHistory, selectedImageUri, session?.token]);
+  }, [history, saveHistory, selectedImageBase64, selectedImageUri, session?.token]);
 
   function renderScreen() {
     if (view.name === 'recognitionResult') {
@@ -217,6 +237,7 @@ export default function App() {
           onRetry={() => {
             setActiveTab('recognition');
             setSelectedImageUri('');
+            setSelectedImageBase64('');
             openTabs();
           }}
         />
@@ -334,3 +355,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
 });
+
+
+
+

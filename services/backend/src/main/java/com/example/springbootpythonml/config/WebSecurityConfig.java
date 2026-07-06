@@ -39,7 +39,7 @@ public class WebSecurityConfig {
                 .requestMatchers("/auth/change-password").authenticated()
                 .requestMatchers("/auth/**").permitAll()
                 .requestMatchers("/news/**").permitAll()
-                .requestMatchers("/recognition").permitAll()
+                .requestMatchers("/recognition", "/recognition/base64").permitAll()
                 .requestMatchers("/api/v1/upload").permitAll()
                 .requestMatchers("/recognition/history/**").authenticated()
                 .requestMatchers("/user/**").authenticated()

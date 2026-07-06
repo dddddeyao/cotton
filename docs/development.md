@@ -4,7 +4,6 @@
 
 ```text
 apps/android                 # Android App
-apps/web                     # Web 前端
 services/backend             # Spring Boot 后端
 services/backend/model-service-python # Python 模型服务
 ```
@@ -38,41 +37,12 @@ copy .env.example .env.local
 核心变量：
 
 ```text
-EXPO_PUBLIC_API_BASE_URL=http://your-domain-or-ip/api
+EXPO_PUBLIC_API_BASE_URL=http://your-domain-or-ip:8080
 EXPO_PUBLIC_MOCK_WHEN_API_UNAVAILABLE=false
 ```
 
 `EXPO_PUBLIC_API_BASE_URL` 留空时会直接使用 mock 数据，便于不启动后端时演示。真机调试时不要使用 `localhost` 作为后端地址，应使用局域网 IP、服务器 IP 或域名。
 
-## Web 前端
-
-运行命令：
-
-```bash
-cd apps/web
-npm install
-npm run dev
-```
-
-接口配置：
-
-```bash
-copy .env.example .env.local
-```
-
-`VITE_API_BASE_URL` 留空时会直接使用 mock 数据，便于单独验收静态页面。
-
-本地直连后端：
-
-```text
-VITE_API_BASE_URL=http://localhost:8080
-```
-
-Docker/Nginx 同源部署：
-
-```text
-VITE_API_BASE_URL=/api
-```
 
 ## 后端服务
 
