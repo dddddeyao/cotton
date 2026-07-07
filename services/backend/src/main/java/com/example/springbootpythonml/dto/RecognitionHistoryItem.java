@@ -19,6 +19,11 @@ public class RecognitionHistoryItem {
     private String filename;
     private String cottonAreaImage;
     private String impurityAreaImage;
+    private String cottonMaskImage;
+    private String impurityMaskImage;
+    private String cottonOverlayImage;
+    private String impurityOverlayImage;
+    private String blackBackgroundImpurityOverlay;
     private String conclusion;
     private LocalDateTime createdAt;
     private LocalDateTime timestamp;
@@ -35,8 +40,13 @@ public class RecognitionHistoryItem {
         item.setConfidence(record.getConfidence());
         item.setLabel(record.getColorGrade() == null ? null : String.valueOf(record.getColorGrade()));
         item.setFilename(null);
-        item.setCottonAreaImage(null);
-        item.setImpurityAreaImage(null);
+        item.setCottonAreaImage(record.getCottonAreaImage());
+        item.setImpurityAreaImage(record.getImpurityAreaImage());
+        item.setCottonMaskImage(record.getCottonMaskImage());
+        item.setImpurityMaskImage(record.getImpurityMaskImage());
+        item.setCottonOverlayImage(record.getCottonOverlayImage());
+        item.setImpurityOverlayImage(record.getImpurityOverlayImage());
+        item.setBlackBackgroundImpurityOverlay(record.getBlackBackgroundImpurityOverlay());
         item.setConclusion(record.getConclusion());
         item.setCreatedAt(record.getCreatedAt());
         item.setTimestamp(record.getCreatedAt());
@@ -90,6 +100,23 @@ public class RecognitionHistoryItem {
 
     public String getImpurityAreaImage() { return impurityAreaImage; }
     public void setImpurityAreaImage(String impurityAreaImage) { this.impurityAreaImage = impurityAreaImage; }
+
+    public String getCottonMaskImage() { return cottonMaskImage; }
+    public void setCottonMaskImage(String cottonMaskImage) { this.cottonMaskImage = cottonMaskImage; }
+
+    public String getImpurityMaskImage() { return impurityMaskImage; }
+    public void setImpurityMaskImage(String impurityMaskImage) { this.impurityMaskImage = impurityMaskImage; }
+
+    public String getCottonOverlayImage() { return cottonOverlayImage; }
+    public void setCottonOverlayImage(String cottonOverlayImage) { this.cottonOverlayImage = cottonOverlayImage; }
+
+    public String getImpurityOverlayImage() { return impurityOverlayImage; }
+    public void setImpurityOverlayImage(String impurityOverlayImage) { this.impurityOverlayImage = impurityOverlayImage; }
+
+    public String getBlackBackgroundImpurityOverlay() { return blackBackgroundImpurityOverlay; }
+    public void setBlackBackgroundImpurityOverlay(String blackBackgroundImpurityOverlay) {
+        this.blackBackgroundImpurityOverlay = blackBackgroundImpurityOverlay;
+    }
 
     public String getConclusion() { return conclusion; }
     public void setConclusion(String conclusion) { this.conclusion = conclusion; }

@@ -63,7 +63,7 @@ App 使用底部四栏 Tab：
 ```text
 优先显示本地缓存新闻
 后台请求后端新闻接口刷新
-后端不可用时使用前端 mock 数据兜底
+后端不可用时提示错误，不生成前端本地替代数据
 不建议前端实时爬取新闻
 ```
 
@@ -128,7 +128,18 @@ App 使用底部四栏 Tab：
 ```text
 必须显示用户上传的原图
 展示后端返回的识别结果参数
+展示棉花掩模、杂质掩模、棉区叠加、杂质叠加和黑底杂质叠加图
 识别失败时允许重新选择图片
+```
+
+当前模型服务返回的图像字段：
+
+```text
+cottonMaskImage
+impurityMaskImage
+cottonOverlayImage
+impurityOverlayImage
+blackBackgroundImpurityOverlay
 ```
 
 ## 6. 识别记录
@@ -238,6 +249,14 @@ App 使用底部四栏 Tab：
 识别历史接口必须登录
 新闻接口不需要登录
 后端返回数据是统一格式
+```
+
+模型服务当前流程：
+
+```text
+fourtime-best.pth 用于颜色识别，输出颜色等级 11/21/31/41/51/61/71
+fenge_best.pth 用于棉花区域分割；与 cottonarea_best.pth 等价时可使用等价文件
+impurityarea_best.pth 用于杂质区域分割
 ```
 
 统一返回格式建议：

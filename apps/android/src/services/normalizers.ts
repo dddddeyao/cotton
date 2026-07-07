@@ -1,6 +1,6 @@
 ﻿import { appConfig } from '../config';
-import { createMockRecognitionResult } from '../data/mockData';
 import { DetectionResult, NewsItem, RecognitionMetric, RecognitionResult, UserProfile, UserSession } from '../types';
+import { hasRealNewsImage } from './newsImages';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -23,6 +23,22 @@ function stringValue(value: unknown, fallback = '') {
 function nullableString(value: unknown) {
   const parsed = stringValue(value);
   return parsed || null;
+}
+
+function nullableImageUri(value: unknown) {
+  const parsed = nullableString(value);
+  return parsed ? resolveImageUri(parsed) : null;
+}
+
+function pickField(raw: AnyRecord, ...keys: string[]) {
+  for (const key of keys) {
+    const value = raw[key];
+    if (value !== undefined && value !== null && value !== '') {
+      return value;
+    }
+  }
+
+  return undefined;
 }
 
 function numberValue(value: unknown, fallback = 0) {
@@ -52,7 +68,11 @@ function nullableNumber(value: unknown): number | null {
 }
 
 function normalizeConfidence(value: unknown) {
-  const parsed = numberValue(value, 0.9);
+  const parsed = nullableNumber(value);
+  if (parsed === null) {
+    return null;
+  }
+
   const normalized = parsed > 1 ? parsed / 100 : parsed;
   return Math.max(0, Math.min(1, normalized));
 }
@@ -70,7 +90,12 @@ function resolveImageUri(value: string) {
     return `${baseUrl}${value}`;
   }
 
-  return value;
+  const baseUrl = appConfig.apiBaseUrl;
+  if (!baseUrl) {
+    return value;
+  }
+
+  return `${baseUrl}/${value.replace(/^\/+/, '')}`;
 }
 
 function normalizeMetric(item: unknown): RecognitionMetric | null {
@@ -114,17 +139,23 @@ function displayPercentRatio(value: unknown) {
 }
 
 function displayConfidence(value: unknown) {
-  const normalized = normalizeConfidence(value);
-  return `${Math.round(normalized * 10000) / 100}%`;
+  const parsed = nullableNumber(value);
+  if (parsed === null) {
+    return '未返回';
+  }
+
+  const normalized = parsed > 1 ? parsed / 100 : parsed;
+  return `${Math.round(Math.max(0, Math.min(1, normalized)) * 10000) / 100}%`;
 }
+
 
 function normalizeDetectionResult(raw: AnyRecord): DetectionResult {
   return {
-    colorGrade: nullableNumber(raw.colorGrade ?? raw.colorLevel),
-    impurityGrade: nullableNumber(raw.impurityGrade ?? raw.leafGrade ?? raw.leafLevel),
-    cottonArea: nullableNumber(raw.cottonArea),
-    impurityArea: nullableNumber(raw.impurityArea ?? raw.trashArea ?? raw.leafArea),
-    areaRatio: nullableNumber(raw.areaRatio),
+    colorGrade: nullableNumber(pickField(raw, 'colorGrade', 'color_grade', 'colorLevel')),
+    impurityGrade: nullableNumber(pickField(raw, 'impurityGrade', 'impurity_grade', 'leafGrade', 'leafLevel')),
+    cottonArea: nullableNumber(pickField(raw, 'cottonArea', 'cotton_area')),
+    impurityArea: nullableNumber(pickField(raw, 'impurityArea', 'impurity_area', 'trashArea', 'leafArea')),
+    areaRatio: nullableNumber(pickField(raw, 'areaRatio', 'area_ratio')),
     confidence: nullableNumber(raw.confidence ?? raw.score ?? raw.probability),
   };
 }
@@ -140,25 +171,6 @@ function buildModelMetrics(detection: DetectionResult): RecognitionMetric[] {
   ];
 }
 
-function buildDetails(raw: AnyRecord, detection: DetectionResult, imageUri: string): RecognitionMetric[] {
-  return [
-    { label: '记录 ID', value: displayValue(raw.id ?? raw.recordId) },
-    { label: '图片地址', value: displayValue(imageUri) },
-    { label: '颜色等级 colorGrade', value: displayValue(detection.colorGrade) },
-    { label: '杂质等级 impurityGrade', value: displayValue(detection.impurityGrade) },
-    { label: '棉花区域 cottonArea', value: displayValue(detection.cottonArea, '%') },
-    { label: '杂质面积 impurityArea', value: displayValue(detection.impurityArea, ' px') },
-    { label: '面积比 areaRatio', value: displayValue(detection.areaRatio) },
-    { label: '置信度 confidence', value: displayValue(detection.confidence) },
-    { label: '兼容标签 label', value: displayValue(raw.label) },
-    { label: '创建时间 createdAt', value: displayValue(raw.createdAt) },
-    { label: '识别时间 timestamp', value: displayValue(raw.timestamp) },
-    { label: '文件名 filename', value: displayValue(raw.filename) },
-    { label: '结论 conclusion', value: displayValue(raw.conclusion) },
-    { label: '棉花区域图 cottonAreaImage', value: displayValue(raw.cottonAreaImage) },
-    { label: '杂质掩模图 impurityAreaImage', value: displayValue(raw.impurityAreaImage) },
-  ];
-}
 
 function buildMetrics(raw: AnyRecord, detection: DetectionResult): RecognitionMetric[] {
   const rawMetrics = raw.metrics ?? raw.parameters ?? raw.items;
@@ -176,12 +188,15 @@ function pickRecognitionPayload(payload: unknown): AnyRecord {
 
   const nested = payload.result ?? payload.recognition ?? payload.detail;
   const base = isRecord(nested) ? nested : payload;
-  const detectionResult = isRecord(base.detectionResult) ? base.detectionResult : {};
+  const detectionPayload = base.detectionResult ?? base.detection_result;
+  const detectionResult = isRecord(detectionPayload) ? detectionPayload : {};
   return { ...base, ...detectionResult };
 }
 
 export function normalizeNewsList(payload: unknown): NewsItem[] {
   const record = isRecord(payload) ? payload : {};
+  const nestedData = isRecord(record.data) ? record.data : {};
+  const nestedResult = isRecord(record.result) ? record.result : {};
   const list = Array.isArray(payload)
     ? payload
     : Array.isArray(record.list)
@@ -192,24 +207,50 @@ export function normalizeNewsList(payload: unknown): NewsItem[] {
           ? record.data
           : Array.isArray(record.items)
             ? record.items
-            : [];
+            : Array.isArray(nestedData.list)
+              ? nestedData.list
+              : Array.isArray(nestedData.records)
+                ? nestedData.records
+                : Array.isArray(nestedData.items)
+                  ? nestedData.items
+                  : Array.isArray(nestedResult.list)
+                    ? nestedResult.list
+                    : Array.isArray(nestedResult.records)
+                      ? nestedResult.records
+                      : Array.isArray(nestedResult.items)
+                        ? nestedResult.items
+                        : [];
 
-  return list.map((item, index) => {
-    const record = isRecord(item) ? item : {};
-    const title = stringValue(record.title ?? record.newsTitle, `棉花新闻 ${index + 1}`);
-    const summary = stringValue(record.summary ?? record.description ?? record.content, '暂无摘要');
+  return list
+    .map((item, index) => {
+      const record = isRecord(item) ? item : {};
+      const title = stringValue(record.title ?? record.newsTitle);
+      if (!title) {
+        return null;
+      }
 
-    return {
-      id: stringValue(record.id ?? record.newsId, `news-${index + 1}`),
-      title,
-      summary,
-      date: stringValue(record.date ?? record.publishDate ?? record.createdAt, ''),
-      source: stringValue(record.source ?? record.origin, '海关动态'),
-      tone: (['blue', 'green', 'orange', 'purple'] as const)[index % 4],
-    };
-  });
+      const summary = stringValue(record.summary ?? record.description ?? record.content);
+      const content = stringValue(record.content ?? record.body ?? record.detail, summary);
+      const resolvedImageUrl = resolveImageUri(stringValue(record.imageUrl ?? record.coverImage ?? record.thumbnail ?? record.image));
+      const imageUrl = hasRealNewsImage(resolvedImageUrl) ? resolvedImageUrl : '';
+      const sourceUrl = resolveImageUri(stringValue(record.sourceUrl ?? record.url ?? record.link));
+
+      return {
+        id: stringValue(record.id ?? record.newsId, sourceUrl || `${title}-${index + 1}`),
+        title,
+        summary,
+        content,
+        date: stringValue(record.date ?? record.publishDate ?? record.createdAt ?? record.crawledAt, ''),
+        source: stringValue(record.source ?? record.origin),
+        sourceUrl,
+        imageUrl,
+        category: stringValue(record.category ?? record.type),
+        keywords: stringValue(record.keywords ?? record.tags),
+        tone: (['blue', 'green', 'orange', 'purple'] as const)[index % 4],
+      };
+    })
+    .filter((item): item is NewsItem => Boolean(item));
 }
-
 export function normalizeSession(payload: unknown, fallbackUsername: string): UserSession {
   const record = isRecord(payload) ? payload : {};
   const nestedUser = isRecord(record.user) ? record.user : {};
@@ -222,33 +263,36 @@ export function normalizeSession(payload: unknown, fallbackUsername: string): Us
 
 export function normalizeRecognitionResult(payload: unknown, imageUri: string): RecognitionResult {
   const raw = pickRecognitionPayload(payload);
-  const mock = createMockRecognitionResult(imageUri);
   const detectionResult = normalizeDetectionResult(raw);
   const metrics = buildMetrics(raw, detectionResult);
-  const colorGrade = stringValue(raw.colorGrade ?? raw.colorLevel);
-  const impurityGrade = stringValue(raw.impurityGrade ?? raw.leafGrade ?? raw.leafLevel);
+  const colorGrade = stringValue(pickField(raw, 'colorGrade', 'color_grade', 'colorLevel'));
+  const impurityGrade = stringValue(pickField(raw, 'impurityGrade', 'impurity_grade', 'leafGrade', 'leafLevel'));
   const grade = stringValue(raw.grade ?? raw.level ?? raw.resultText, [colorGrade, impurityGrade].filter(Boolean).join(' / '));
-  const resolvedImageUri = resolveImageUri(stringValue(
-    raw.imageUri ?? raw.imageUrl ?? raw.url ?? raw.cottonAreaImage ?? raw.impurityAreaImage,
-    imageUri,
-  ));
+  const createdAt = stringValue(pickField(raw, 'createdAt', 'created_at', 'time', 'recognitionTime', 'timestamp'));
+  const timestamp = stringValue(raw.timestamp, createdAt);
+  const resolvedImageUri = resolveImageUri(stringValue(pickField(raw, 'imageUri', 'image_uri', 'imageUrl', 'url'), imageUri));
 
   return {
-    ...mock,
-    id: stringValue(raw.id ?? raw.recordId, mock.id),
+    id: stringValue(pickField(raw, 'id', 'recordId', 'record_id'), timestamp || resolvedImageUri),
     imageUri: resolvedImageUri,
-    createdAt: stringValue(raw.createdAt ?? raw.time ?? raw.recognitionTime ?? raw.timestamp, mock.createdAt),
-    grade: grade || mock.grade,
+    createdAt,
+    grade: grade || '未返回',
     confidence: normalizeConfidence(raw.confidence ?? raw.score ?? raw.probability ?? detectionResult.confidence),
-    label: stringValue(raw.label, colorGrade || mock.label),
-    timestamp: stringValue(raw.timestamp, stringValue(raw.createdAt, mock.timestamp)),
-    filename: stringValue(raw.filename, mock.filename),
-    cottonAreaImage: nullableString(raw.cottonAreaImage),
-    impurityAreaImage: nullableString(raw.impurityAreaImage),
+    label: stringValue(raw.label, colorGrade),
+    timestamp,
+    filename: stringValue(raw.filename),
+    cottonMaskImage: nullableImageUri(pickField(raw, 'cottonMaskImage', 'cotton_mask_image')),
+    impurityMaskImage: nullableImageUri(pickField(raw, 'impurityMaskImage', 'impurity_mask_image')),
+    cottonOverlayImage: nullableImageUri(pickField(raw, 'cottonOverlayImage', 'cotton_overlay_image')),
+    impurityOverlayImage: nullableImageUri(pickField(raw, 'impurityOverlayImage', 'impurity_overlay_image')),
+    blackBackgroundImpurityOverlay: nullableImageUri(
+      pickField(raw, 'blackBackgroundImpurityOverlay', 'black_background_impurity_overlay'),
+    ),
+    cottonAreaImage: nullableImageUri(pickField(raw, 'cottonAreaImage', 'cotton_area_image')),
+    impurityAreaImage: nullableImageUri(pickField(raw, 'impurityAreaImage', 'impurity_area_image')),
     detectionResult,
     metrics,
-    details: buildDetails(raw, detectionResult, resolvedImageUri),
-    conclusion: stringValue(raw.conclusion ?? raw.message ?? raw.remark, grade ? `等级 ${grade}` : mock.conclusion),
+    conclusion: stringValue(raw.conclusion ?? raw.message ?? raw.remark),
     isLocal: false,
   };
 }
@@ -268,7 +312,7 @@ export function normalizeRecognitionHistory(payload: unknown): RecognitionResult
             : [];
 
   return list.map((item, index) => {
-    const imageUri = isRecord(item) ? stringValue(item.imageUri ?? item.imageUrl ?? item.url) : '';
+    const imageUri = isRecord(item) ? stringValue(pickField(item, 'imageUri', 'image_uri', 'imageUrl', 'url')) : '';
     const result = normalizeRecognitionResult(item, imageUri);
     return {
       ...result,
@@ -285,6 +329,6 @@ export function normalizeProfile(payload: unknown, username: string): UserProfil
     nickname: stringValue(record.nickname ?? record.name),
     phone: stringValue(record.phone ?? record.mobile),
     organization: stringValue(record.organization ?? record.company ?? record.department),
-    role: stringValue(record.role ?? record.identity, '研究人员'),
+    role: stringValue(record.role ?? record.identity),
   };
 }

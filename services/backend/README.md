@@ -28,7 +28,7 @@ services/backend/
 - MySQL 数据库：`cotton_db`
 - Python 推理服务：`http://127.0.0.1:5000`
 
-生产环境请通过环境变量或外部配置覆盖数据库账号、密码、JWT 密钥、Python 服务地址和 CORS 来源：
+生产环境请通过环境变量或外部配置覆盖数据库账号、密码、JWT 密钥、Python 服务地址和 CORS 来源；`JWT_SECRET` 没有可用默认值，必须显式设置：
 
 ```text
 SERVER_PORT
@@ -44,6 +44,8 @@ APP_UPLOAD_DIR
 APP_CORS_ALLOWED_ORIGINS
 APP_CORS_ALLOW_CREDENTIALS
 ```
+
+`JWT_SECRET` 必须是 Base64 编码且解码后至少 32 字节，可用 `openssl rand -base64 32` 生成。
 
 ## 运行
 

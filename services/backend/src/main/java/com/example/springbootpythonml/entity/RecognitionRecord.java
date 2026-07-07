@@ -17,6 +17,34 @@ public class RecognitionRecord {
     @Column(name = "image_uri", length = 500)
     private String imageUri;
 
+    @Lob
+    @Column(name = "cotton_area_image", columnDefinition = "LONGTEXT")
+    private String cottonAreaImage;
+
+    @Lob
+    @Column(name = "impurity_area_image", columnDefinition = "LONGTEXT")
+    private String impurityAreaImage;
+
+    @Lob
+    @Column(name = "cotton_mask_image", columnDefinition = "LONGTEXT")
+    private String cottonMaskImage;
+
+    @Lob
+    @Column(name = "impurity_mask_image", columnDefinition = "LONGTEXT")
+    private String impurityMaskImage;
+
+    @Lob
+    @Column(name = "cotton_overlay_image", columnDefinition = "LONGTEXT")
+    private String cottonOverlayImage;
+
+    @Lob
+    @Column(name = "impurity_overlay_image", columnDefinition = "LONGTEXT")
+    private String impurityOverlayImage;
+
+    @Lob
+    @Column(name = "black_background_impurity_overlay", columnDefinition = "LONGTEXT")
+    private String blackBackgroundImpurityOverlay;
+
     @Column(name = "color_grade")
     private Integer colorGrade;
 
@@ -56,6 +84,29 @@ public class RecognitionRecord {
 
     public String getImageUri() { return imageUri; }
     public void setImageUri(String imageUri) { this.imageUri = imageUri; }
+
+    public String getCottonAreaImage() { return cottonAreaImage; }
+    public void setCottonAreaImage(String cottonAreaImage) { this.cottonAreaImage = cottonAreaImage; }
+
+    public String getImpurityAreaImage() { return impurityAreaImage; }
+    public void setImpurityAreaImage(String impurityAreaImage) { this.impurityAreaImage = impurityAreaImage; }
+
+    public String getCottonMaskImage() { return cottonMaskImage; }
+    public void setCottonMaskImage(String cottonMaskImage) { this.cottonMaskImage = cottonMaskImage; }
+
+    public String getImpurityMaskImage() { return impurityMaskImage; }
+    public void setImpurityMaskImage(String impurityMaskImage) { this.impurityMaskImage = impurityMaskImage; }
+
+    public String getCottonOverlayImage() { return cottonOverlayImage; }
+    public void setCottonOverlayImage(String cottonOverlayImage) { this.cottonOverlayImage = cottonOverlayImage; }
+
+    public String getImpurityOverlayImage() { return impurityOverlayImage; }
+    public void setImpurityOverlayImage(String impurityOverlayImage) { this.impurityOverlayImage = impurityOverlayImage; }
+
+    public String getBlackBackgroundImpurityOverlay() { return blackBackgroundImpurityOverlay; }
+    public void setBlackBackgroundImpurityOverlay(String blackBackgroundImpurityOverlay) {
+        this.blackBackgroundImpurityOverlay = blackBackgroundImpurityOverlay;
+    }
 
     public Integer getColorGrade() { return colorGrade; }
     public void setColorGrade(Integer colorGrade) { this.colorGrade = colorGrade; }

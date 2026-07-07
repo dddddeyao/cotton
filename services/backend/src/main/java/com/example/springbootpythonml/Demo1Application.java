@@ -1,15 +1,20 @@
 package com.example.springbootpythonml;
 
+import com.example.springbootpythonml.config.NewsCrawlerProperties;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.context.annotation.Bean;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
 
+@EnableScheduling
+@EnableConfigurationProperties(NewsCrawlerProperties.class)
 @SpringBootApplication(exclude = UserDetailsServiceAutoConfiguration.class)
 public class Demo1Application {
 

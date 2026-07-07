@@ -23,7 +23,7 @@ spring:
 
 # JWT 配置
 jwt:
-  secret: ${JWT_SECRET:Y29udG9uLXJlY29nbml0aW9uLWFzc2lzdGFudC1zZWNyZXQta2V5LWZvci1wcm9kdWN0aW9uLTIwMjY=}
+  secret: ${JWT_SECRET:}
   expiration: ${JWT_EXPIRATION:604800000}  # 7 天 (毫秒)
 
 # Flask 推理服务地址
@@ -35,6 +35,250 @@ python:
 
 app:
   upload-dir: ${APP_UPLOAD_DIR:uploads}
+
+  recognition:
+    max-image-bytes: ${APP_RECOGNITION_MAX_IMAGE_BYTES:10485760}
+    max-base64-chars: ${APP_RECOGNITION_MAX_BASE64_CHARS:14000000}
+    max-image-pixels: ${APP_RECOGNITION_MAX_IMAGE_PIXELS:25000000}
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:*}
     allow-credentials: ${APP_CORS_ALLOW_CREDENTIALS:false}
+  news:
+    crawler:
+      enabled: ${APP_NEWS_CRAWLER_ENABLED:false}
+      initial-delay-ms: ${APP_NEWS_CRAWLER_INITIAL_DELAY_MS:60000}
+      fixed-delay-ms: ${APP_NEWS_CRAWLER_FIXED_DELAY_MS:86400000}
+      max-items-per-source: ${APP_NEWS_CRAWLER_MAX_ITEMS_PER_SOURCE:5}
+      max-items-per-refresh: ${APP_NEWS_CRAWLER_MAX_ITEMS_PER_REFRESH:5}
+      max-items-per-day: ${APP_NEWS_CRAWLER_MAX_ITEMS_PER_DAY:5}
+      max-stored-items: ${APP_NEWS_CRAWLER_MAX_STORED_ITEMS:100}
+      min-stored-items: ${APP_NEWS_CRAWLER_MIN_STORED_ITEMS:50}
+      min-chinese-ratio: ${APP_NEWS_CRAWLER_MIN_CHINESE_RATIO:0.75}
+      request-timeout-ms: ${APP_NEWS_CRAWLER_REQUEST_TIMEOUT_MS:20000}
+      require-image: ${APP_NEWS_CRAWLER_REQUIRE_IMAGE:false}
+      fetch-article-content: true
+      download-images: true
+      image-directory: news
+      include-keywords:
+        - 棉花
+        - 原棉
+        - 皮棉
+        - 籽棉
+        - 进口棉
+        - 新疆棉
+        - 疆棉
+        - 郑棉
+        - 美棉
+        - 棉价
+        - 棉市
+        - 棉纱
+        - 棉纺
+        - 棉企
+        - 纺企
+        - 纺织
+        - 棉农
+        - 棉花检验
+        - 纤维检验
+        - HVI
+        - 颜色级
+        - 叶屑
+        - cotton
+        - 海关
+        - 检测
+        - 识别
+        - 图像识别
+        - 质量检测
+        - 质量
+        - 纤维
+        - 检验
+        - 分级
+        - 进口
+        - 出口
+      reject-keywords:
+        - 娱乐
+        - 体育
+        - 彩票
+        - 游戏
+        - 汽车
+        - 房产
+        - 招聘
+        - 广告
+        - 优惠券
+      sources:
+        - name: 中国棉花信息网
+          url: https://www.cottonchina.org.cn/
+          type: html
+          language: zh
+          category: 中文棉花资讯
+          url-pattern: news_showa\.php
+        - name: 中国棉花信息网-国内棉花
+          url: https://www.cottonchina.org.cn/domestic/index.php
+          type: html
+          language: zh
+          category: 国内棉花资讯
+          url-pattern: news_showa\.php
+        - name: 中国棉花信息网-新疆棉花
+          url: https://www.cottonchina.org.cn/xinjiang/index.php
+          type: html
+          language: zh
+          category: 新疆棉花资讯
+          url-pattern: news_showa\.php
+        - name: 中国棉花信息网-纺织市场
+          url: https://www.cottonchina.org.cn/textile/index.php
+          type: html
+          language: zh
+          category: 纺织棉花资讯
+          url-pattern: news_showa\.php
+        - name: 中国棉花信息网-外棉中文报道
+          url: https://www.cottonchina.org.cn/foreign/index.php
+          type: html
+          language: zh
+          category: 外棉中文资讯
+          url-pattern: news_showa\.php
+        - name: 中国棉花信息网-棉花期货
+          url: https://www.cottonchina.org.cn/futures/index.php
+          type: html
+          language: zh
+          category: 棉花期货资讯
+          url-pattern: news_showa\.php
+        - name: 中国棉花信息网-棉花进口
+          url: 'https://www.cottonchina.org.cn/news/newsser.php?relnews=%C3%DE%BB%A8%BD%F8%BF%DA'
+          type: html
+          language: zh
+          category: 棉花进口资讯
+          url-pattern: news_showa\.php
+        - name: 中国棉花信息网-众说棉花
+          url: 'https://www.cottonchina.org.cn/news/newsser.php?relnews=%D6%DA%CB%B5%C3%DE%BB%A8'
+          type: html
+          language: zh
+          category: 棉花观点资讯
+          url-pattern: news_showa\.php
+        - name: 中国棉花信息网-企业棉价
+          url: 'https://www.cottonchina.org.cn/news/newsser.php?relnews=%C6%F3%D2%B5%C3%DE%BC%DB'
+          type: html
+          language: zh
+          category: 棉价资讯
+          url-pattern: news_showa\.php
+        - name: 中国棉花信息网-平衡表
+          url: 'https://www.cottonchina.org.cn/news/newsser.php?relnews=%C6%BD%BA%E2%B1%ED'
+          type: html
+          language: zh
+          category: 棉花供需资讯
+          url-pattern: news_showa\.php
+        - name: 中国棉花信息网-生产调查
+          url: 'https://www.cottonchina.org.cn/news/newsser.php?relnews=生产调查'
+          type: html
+          language: zh
+          category: 棉花生产资讯
+          url-pattern: news_showa\.php
+        - name: 中国棉花信息网-商业库存
+          url: 'https://www.cottonchina.org.cn/news/newsser.php?relnews=商业库存'
+          type: html
+          language: zh
+          category: 棉花库存资讯
+          url-pattern: news_showa\.php
+        - name: 中国棉花信息网-棉市快讯
+          url: 'https://www.cottonchina.org.cn/news/newsser.php?relnews=棉市快讯%7C纱情速递'
+          type: html
+          language: zh
+          category: 棉市快讯
+          url-pattern: news_showa\.php
+        - name: 中国棉花信息网-纺织调查
+          url: 'https://www.cottonchina.org.cn/news/newsser.php?relnews=纺织调查'
+          type: html
+          language: zh
+          category: 纺织调查资讯
+          url-pattern: news_showa\.php
+        - name: 中国棉花信息网-纺织日报
+          url: 'https://www.cottonchina.org.cn/news/newsser.php?relnews=纺织日报%7C轻纺行情'
+          type: html
+          language: zh
+          category: 纺织棉花资讯
+          url-pattern: news_showa\.php
+        - name: 中国棉花信息网-CIF棉价
+          url: 'https://www.cottonchina.org.cn/news/newsser.php?relnews=CIF%7CCotlook'
+          type: html
+          language: zh
+          category: 国际棉价中文资讯
+          url-pattern: news_showa\.php
+        - name: 中国棉花信息网-USDA中文报道
+          url: 'https://www.cottonchina.org.cn/news/newsser.php?relnews=USDA'
+          type: html
+          language: zh
+          category: USDA中文资讯
+          url-pattern: news_showa\.php
+        - name: 中国棉花信息网-郑商所期货
+          url: 'https://www.cottonchina.org.cn/news/newsser.php?relnews=郑商所期货'
+          type: html
+          language: zh
+          category: 郑棉期货资讯
+          url-pattern: news_showa\.php
+        - name: 中国棉花信息网-郑棉仓单
+          url: 'https://www.cottonchina.org.cn/news/newsser.php?relnews=郑棉仓单'
+          type: html
+          language: zh
+          category: 郑棉仓单资讯
+          url-pattern: news_showa\.php
+        - name: 纺织网-统计数据
+          url: https://info.texnet.com.cn/list--19-.html
+          type: html
+          language: zh
+          category: 纺织统计资讯
+          url-pattern: detail-\d+\.html
+          content-selector: .box_left
+        - name: 纺织网-出口关键词
+          url: https://info.texnet.com.cn/key-%E5%87%BA%E5%8F%A3-1.html
+          type: html
+          language: zh
+          category: 纺织出口资讯
+          url-pattern: detail-\d+\.html
+          content-selector: .box_left
+        - name: 生意社-皮棉频道
+          url: https://cotton.100ppi.com/
+          type: html
+          language: zh
+          category: 皮棉行情资讯
+          url-pattern: /news/detail-\d{8}-\d+\.html
+          content-selector: .content|.article|.newscontent
+        - name: 生意社-皮棉情报
+          url: 'https://www.100ppi.com/qb/?pid=89'
+          type: html
+          language: zh
+          category: 皮棉情报资讯
+          url-pattern: /news/detail-\d{8}-\d+\.html
+          content-selector: .content|.article|.newscontent
+        - name: 中纺联-数据分析
+          url: https://www.cntac.org.cn/zixun/shuju/
+          type: html
+          language: zh
+          category: 纺织数据资讯
+          url-pattern: /zixun/(shuju|hangye|guoji)/\d{6}/t\d{8}_\d+\.html
+          content-selector: .TRS_Editor|.article-content|.content
+        - name: 中纺联-行业发展
+          url: https://www.cntac.org.cn/zixun/hangye/
+          type: html
+          language: zh
+          category: 纺织行业资讯
+          url-pattern: /zixun/(shuju|hangye|guoji)/\d{6}/t\d{8}_\d+\.html
+          content-selector: .TRS_Editor|.article-content|.content
+        - name: 中纺联-国际动态
+          url: https://www.cntac.org.cn/zixun/guoji/
+          type: html
+          language: zh
+          category: 纺织国际资讯
+          url-pattern: /zixun/(shuju|hangye|guoji)/\d{6}/t\d{8}_\d+\.html
+          content-selector: .TRS_Editor|.article-content|.content
+        - name: 中国质量新闻网-检验检测
+          url: https://www.cqn.com.cn/zj/node_20190.htm
+          type: html
+          language: zh
+          category: 检验检测资讯
+          url-pattern: /.*content_\d+\.htm
+          content-selector: .TRS_Editor|.content|.article-content|.detail-content
+        - name: 中国质量新闻网-质量纤锋
+          url: https://www.cqn.com.cn/zt/node_25942.htm
+          type: html
+          language: zh
+          category: 纤维质量资讯
+          url-pattern: /.*content_\d+\.htm
+          content-selector: .TRS_Editor|.content|.article-content|.detail-content

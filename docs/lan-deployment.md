@@ -1,4 +1,4 @@
-# 局域网单机部署说明
+﻿# 局域网单机部署说明
 
 目标：把 Spring Boot 后端、MySQL 数据库、Python 算法模型服务部署在同一台电脑上。同一 Wi-Fi 或同一局域网内的 Android App 直接调用这台电脑上的后端接口。
 
@@ -10,7 +10,7 @@ Android App
      -> Spring Boot 后端
         -> MySQL
         -> Python Flask 模型服务
-           -> cotton-best.pth / fenge_best.pth
+           -> fourtime-best.pth / fenge_best.pth / impurityarea_best.pth
 ```
 
 对外只需要开放后端端口，默认是 `8080`。模型服务 `5000`、MySQL `3306` 不需要暴露给局域网用户。
@@ -27,9 +27,12 @@ Docker Compose
 确认模型文件存在：
 
 ```text
-services/backend/model-service-python/cotton-best.pth
+services/backend/model-service-python/fourtime-best.pth
 services/backend/model-service-python/fenge_best.pth
+services/backend/model-service-python/impurityarea_best.pth
 ```
+
+当前流程使用 `fourtime-best.pth` 做颜色识别，`fenge_best.pth` 做棉花区域分割，`impurityarea_best.pth` 做杂质区域分割。如果本地已有等价的 `cottonarea_best.pth`，可重命名为 `fenge_best.pth`，或通过 `COTTON_UNET_WEIGHTS` 配置为该文件名。
 
 确认电脑和 Android 设备在同一个网络下，例如都连接同一个 Wi-Fi。
 
@@ -64,6 +67,13 @@ LAN_HOST_IP=192.168.1.100
 BACKEND_PUBLIC_PORT=8080
 MYSQL_PASSWORD=换成你自己的数据库密码
 MYSQL_ROOT_PASSWORD=换成你自己的数据库 root 密码
+JWT_SECRET=换成 Base64 编码的 HMAC 密钥
+```
+
+`JWT_SECRET` 需要显式填写。PowerShell 可用下面的命令生成：
+
+```powershell
+[Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
 ```
 
 ## 5. 启动服务
@@ -113,7 +123,6 @@ Copy-Item apps/android/.env.lan.example apps/android/.env.local
 
 ```text
 EXPO_PUBLIC_API_BASE_URL=http://192.168.1.100:8080
-EXPO_PUBLIC_MOCK_WHEN_API_UNAVAILABLE=false
 ```
 
 如果只是 Expo 调试，重启 Expo：
@@ -169,7 +178,7 @@ docker compose logs -f model-service
 
 ```text
 1. 检查 model-service 是否 healthy。
-2. 检查 cotton-best.pth 和 fenge_best.pth 是否在 model-service-python 目录。
+2. 检查 fourtime-best.pth、fenge_best.pth 和 impurityarea_best.pth 是否在 model-service-python 目录。
 3. 查看 docker compose logs -f model-service。
 4. 查看 docker compose logs -f backend。
 ```

@@ -1,88 +1,116 @@
 # -*- coding: utf-8 -*-
 """
-Flask 图片推理服务（加速优化版，含 ?images=0 / ?fast=1 开关 + 可选表单 returnImages=false）
+Flask image inference service.
 
-- ResNet50：输出 colorGrade & impurityGrade（数字类别索引），confidence
-- UNet：棉花区域分割，返回 cottonArea（百分比，0~100，保留6位小数）
-- OpenCV：在棉花 ROI 内分割杂质（支持 ROI+下采样 加速），返回 impurityArea（像素个数）、areaRatio（杂质/棉花）
-- 可选：返回一张叠加图 + 一张二值掩模图（cottonAreaImage=overlay，impurityAreaImage=mask，dataURL）
-  · 可通过 query 参数 images=0 关闭（向后兼容）
-  · 或通过表单字段 returnImages=false 关闭（推荐；无图开关）
-- 可选：快速模式 fast=1（关闭 DoG 闸门/降尺度更 aggressive），进一步提速
+- Color classifier: ResNet family checkpoint, default fourtime-best.pth.
+- Cotton segmentation: UNet, default fenge_best.pth.
+- Impurity segmentation: UNet, default impurityarea_best.pth, inferred inside
+  the cotton ROI instead of using OpenCV rule segmentation.
+- Optional image fields can be disabled with ?images=0 or returnImages=false.
 """
 
 from flask import Flask, request, jsonify
-# 如需压缩响应体，可启用 gzip（pip install Flask-Compress）：
-# from flask_compress import Compress
 
-import io, base64, os, time
-import numpy as np
+import base64
+import io
+import os
+import re
+import time
+
 import cv2
-from PIL import Image
-
+import numpy as np
 import torch
 import torchvision.transforms as T
-from torchvision import models
+from PIL import Image
 from torch import nn
+from torchvision import models
 
-# === UNet 实现（确保同目录有 unet.py / unet_parts.py） ===
 try:
     from unet import UNet
 except Exception:
-    # 某些工程结构为包名.unet
-    from .unet import UNet  # 根据你的项目结构选择是否保留
+    from .unet import UNet
+
 
 app = Flask(__name__)
-# Compress(app)  # 可选：启用 gzip
 
-# 让 OpenCV 利用多线程（按 CPU 核数调整）
 try:
     cv2.setNumThreads(4)
 except Exception:
     pass
 
-# =============================
-# 全局推理加速选项
-# =============================
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-torch.backends.cudnn.benchmark = True  # 针对固定分辨率卷积加速
-torch.set_grad_enabled(False)          # 关闭梯度
-# 在上下文中使用 torch.inference_mode()（更快 & 更省内存）
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+torch.backends.cudnn.benchmark = True
+torch.set_grad_enabled(False)
 
-# =============================
-# 配置（可按需修改）
-# =============================
-# 分类模型（ResNet50）
-CLASS_MODEL_PATH = "cotton-best.pth"
-NUM_CLASSES      = 7
 
-# 分割模型（UNet）
-UNET_WEIGHTS = "fenge_best.pth"
-IMG_SIZE     = 640
-THRESH       = 0.5
-USE_AMP      = True            # CUDA 下开启 autocast
-KEEP_RATIO   = False
-BILINEAR_UP  = False
+def env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
-# 杂质分割参数（默认较快）
-ROI_MAX_SIDE_FAST   = 1024     # fast=1 时 ROI 下采样最大边
-ROI_MAX_SIDE_NORMAL = 1280     # fast=0 时 ROI 下采样最大边
-USE_BLOB_GATE_FAST  = False    # fast=1 关闭 DoG 闸门
-USE_BLOB_GATE_NORM  = True     # fast=0 开启 DoG 闸门（更稳健，稍慢）
-DOG_SIGMAS_FAST     = [1.0, 1.6]             # fast=1 减少尺度
-DOG_SIGMAS_NORM     = [0.9, 1.4, 2.0]        # fast=0 适中
-TOP_KEEP_PCTS       = [1.0, 2.0]             # 简化回退策略
-BORDER_MIN_DIST     = 6
-MIN_AREA            = 5
-MAX_ASPECT          = 3.0
-MIN_CIRC            = 0.30
-MIN_SOLIDITY        = 0.80
 
-# =============================
-# 常用工具
-# =============================
-def image_to_dataurl(pil_img: Image.Image, fmt="JPEG", quality=85) -> str:
-    """编码为 dataURL；默认 JPEG 更快更小"""
+def env_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    return int(value)
+
+
+def env_float(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    return float(value)
+
+
+MAX_CONTENT_LENGTH = env_int("MAX_CONTENT_LENGTH", 10 * 1024 * 1024)
+MAX_IMAGE_PIXELS = env_int("MAX_IMAGE_PIXELS", 25_000_000)
+ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "WEBP"}
+app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
+Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+
+
+def resolve_model_path(env_name: str, default_name: str) -> str:
+    configured = os.getenv(env_name, default_name).strip()
+    if os.path.isabs(configured):
+        return configured
+    return os.path.join(BASE_DIR, configured)
+
+
+def parse_int_labels(raw: str) -> list[int]:
+    labels = [item.strip() for item in raw.split(",") if item.strip()]
+    if not labels:
+        raise ValueError("COLOR_GRADE_LABELS cannot be empty")
+    return [int(item) for item in labels]
+
+
+COLOR_MODEL_PATH = resolve_model_path("COLOR_MODEL_PATH", "fourtime-best.pth")
+COLOR_RESIZE_SIZE = env_int("COLOR_RESIZE_SIZE", 320)
+COLOR_IMG_SIZE = env_int("COLOR_IMG_SIZE", 224)
+COLOR_GRADE_LABELS = parse_int_labels(os.getenv("COLOR_GRADE_LABELS", "11,21,31,41,51,61,71"))
+
+COTTON_UNET_WEIGHTS = resolve_model_path("COTTON_UNET_WEIGHTS", "fenge_best.pth")
+COTTON_IMG_SIZE = env_int("COTTON_IMG_SIZE", 640)
+COTTON_THRESH = env_float("COTTON_THRESH", 0.5)
+COTTON_KEEP_RATIO = env_bool("COTTON_KEEP_RATIO", False)
+COTTON_BILINEAR_UP = env_bool("COTTON_BILINEAR_UP", False)
+
+IMPURITY_UNET_WEIGHTS = resolve_model_path("IMPURITY_UNET_WEIGHTS", "impurityarea_best.pth")
+IMPURITY_IMG_SIZE = env_int("IMPURITY_IMG_SIZE", 640)
+IMPURITY_THRESH = env_float("IMPURITY_THRESH", 0.5)
+IMPURITY_KEEP_RATIO = env_bool("IMPURITY_KEEP_RATIO", True)
+IMPURITY_BILINEAR_UP = env_bool("IMPURITY_BILINEAR_UP", False)
+IMPURITY_ROI_MARGIN = env_int("IMPURITY_ROI_MARGIN", 5)
+
+USE_AMP = env_bool("USE_AMP", True)
+SMOOTH_EDGES = env_bool("SMOOTH_EDGES", True)
+SMOOTH_SIGMA = env_float("SMOOTH_SIGMA", 1.0)
+SMOOTH_ITERS = env_int("SMOOTH_ITERS", 1)
+
+
+def image_to_dataurl(pil_img: Image.Image, fmt: str = "JPEG", quality: int = 85) -> str:
     buf = io.BytesIO()
     if fmt.upper() == "JPEG":
         pil_img.save(buf, format="JPEG", quality=quality, optimize=True)
@@ -93,30 +121,52 @@ def image_to_dataurl(pil_img: Image.Image, fmt="JPEG", quality=85) -> str:
     b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
     return f"data:{mime};base64,{b64}"
 
-def mask_to_dataurl(mask_u8: np.ndarray) -> str:
-    """
-    将二值掩模(0/255 或 0/1)转为 PNG dataURL（灰度）。
-    - 输入若为 {0,1}，会自动乘 255。
-    - 采用 PNG 保真，避免 JPEG 伪影。
-    """
-    if mask_u8.dtype != np.uint8:
-        mask_u8 = mask_u8.astype(np.uint8)
-    if mask_u8.max() == 1:
-        mask_u8 = (mask_u8 * 255).astype(np.uint8)
+
+def mask_to_dataurl(mask_bin: np.ndarray) -> str:
+    mask_u8 = mask_bin.astype(np.uint8)
+    if mask_u8.size == 0 or mask_u8.max() <= 1:
+        mask_u8 = mask_u8 * 255
     pil_mask = Image.fromarray(mask_u8, mode="L")
     return image_to_dataurl(pil_mask, fmt="PNG")
 
-def overlay_color(pil_rgb: Image.Image, mask_bin: np.ndarray, color=(255, 0, 0), alpha=0.4):
-    """将二值掩膜用指定颜色半透明覆盖到原图"""
+
+def overlay_color(
+    pil_rgb: Image.Image,
+    mask_bin: np.ndarray,
+    color: tuple[int, int, int] = (255, 0, 0),
+    alpha: float = 0.4,
+) -> Image.Image:
     img = np.array(pil_rgb).astype(np.float32)
     if img.ndim == 2:
         img = np.stack([img] * 3, axis=-1)
-    overlay = img.copy()
-    overlay[mask_bin > 0] = color
-    out = (img * (1 - alpha) + overlay * alpha).astype(np.uint8)
-    return Image.fromarray(out)
+    mask = mask_bin.astype(bool)
+    if mask.any():
+        color_arr = np.array(color, dtype=np.float32)
+        img[mask] = img[mask] * (1.0 - alpha) + color_arr * alpha
+    return Image.fromarray(np.clip(img, 0, 255).astype(np.uint8))
 
-def letterbox(im: Image.Image, new_size: int, color=(0, 0, 0)):
+
+def overlay_black_bg_keep_cotton_with_impurity(
+    pil_rgb: Image.Image,
+    cotton_mask: np.ndarray,
+    impurity_mask: np.ndarray,
+    alpha: float = 0.45,
+) -> Image.Image:
+    img = np.array(pil_rgb).astype(np.float32)
+    if img.ndim == 2:
+        img = np.stack([img] * 3, axis=-1)
+
+    cotton = cotton_mask.astype(bool)
+    impurity = impurity_mask.astype(bool) & cotton
+    out = np.zeros_like(img)
+    out[cotton] = img[cotton]
+    if impurity.any():
+        red = np.array((255, 0, 0), dtype=np.float32)
+        out[impurity] = out[impurity] * (1.0 - alpha) + red * alpha
+    return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8))
+
+
+def letterbox(im: Image.Image, new_size: int, color: tuple[int, int, int] = (0, 0, 0)):
     w, h = im.size
     scale = float(new_size) / max(w, h)
     new_w, new_h = int(round(w * scale)), int(round(h * scale))
@@ -127,358 +177,477 @@ def letterbox(im: Image.Image, new_size: int, color=(0, 0, 0)):
     canvas.paste(im_resized, (pad_w, pad_h))
     return canvas, (scale, pad_w, pad_h)
 
-def unletterbox_mask(mask_np: np.ndarray, orig_size, params):
-    """将方形 mask 反变换回原尺寸（去 padding -> 反缩放）"""
-    H, W = orig_size[1], orig_size[0]
+
+def unletterbox_mask(mask_np: np.ndarray, orig_size: tuple[int, int], params):
+    width, height = orig_size
     scale, pad_w, pad_h = params
-    new_h, new_w = int(round(H * scale)), int(round(W * scale))
+    new_w = int(round(width * scale))
+    new_h = int(round(height * scale))
     crop = mask_np[pad_h: pad_h + new_h, pad_w: pad_w + new_w]
     pil = Image.fromarray((crop * 255).astype(np.uint8))
-    pil = pil.resize((W, H), Image.NEAREST)
+    pil = pil.resize((width, height), Image.NEAREST)
     return (np.array(pil) > 127).astype(np.uint8)
 
+
 def pil_to_tensor_01(img_pil: Image.Image, size: int, keep_ratio: bool):
-    """返回 [1,3,H,W] 张量（0-1）和 letterbox 参数（若启用）"""
     if keep_ratio:
         sq, params = letterbox(img_pil, size)
         tensor = T.ToTensor()(sq).unsqueeze(0)
         return tensor, params
+
+    img_rs = T.Resize((size, size))(img_pil)
+    tensor = T.ToTensor()(img_rs).unsqueeze(0)
+    return tensor, None
+
+
+def resize_mask_to_original(mask_np: np.ndarray, orig_size: tuple[int, int]) -> np.ndarray:
+    width, height = orig_size
+    pil = Image.fromarray((mask_np * 255).astype(np.uint8))
+    pil = pil.resize((width, height), Image.NEAREST)
+    return (np.array(pil) > 127).astype(np.uint8)
+
+
+def smooth_binary_mask(mask_bin: np.ndarray) -> np.ndarray:
+    mask_u8 = (mask_bin.astype(np.uint8) > 0).astype(np.uint8) * 255
+    if not SMOOTH_EDGES or mask_u8.size == 0 or mask_u8.max() == 0:
+        return (mask_u8 > 0).astype(np.uint8)
+
+    if SMOOTH_SIGMA > 0:
+        mask_u8 = cv2.GaussianBlur(mask_u8, (0, 0), sigmaX=SMOOTH_SIGMA)
+        mask_u8 = (mask_u8 > 127).astype(np.uint8) * 255
+
+    if SMOOTH_ITERS > 0:
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        mask_u8 = cv2.morphologyEx(mask_u8, cv2.MORPH_CLOSE, kernel, iterations=SMOOTH_ITERS)
+
+    return (mask_u8 > 0).astype(np.uint8)
+
+
+def crop_to_mask_bbox(img_pil: Image.Image, mask_bin: np.ndarray, margin: int):
+    ys, xs = np.where(mask_bin > 0)
+    if len(xs) == 0:
+        return None, None
+
+    width, height = img_pil.size
+    x0 = max(0, int(xs.min()) - margin)
+    y0 = max(0, int(ys.min()) - margin)
+    x1 = min(width, int(xs.max()) + 1 + margin)
+    y1 = min(height, int(ys.max()) + 1 + margin)
+    if x1 <= x0 or y1 <= y0:
+        return None, None
+
+    return img_pil.crop((x0, y0, x1, y1)), (x0, y0, x1, y1)
+
+
+def paste_mask_to_original(mask_crop: np.ndarray, bbox, original_shape: tuple[int, int]) -> np.ndarray:
+    x0, y0, x1, y1 = bbox
+    height, width = original_shape
+    full = np.zeros((height, width), dtype=np.uint8)
+    full[y0:y1, x0:x1] = mask_crop.astype(np.uint8)
+    return full
+
+
+def classify_impurity_ratio(ratio_percent: float) -> int:
+    if ratio_percent <= 0.12:
+        return 1
+    if ratio_percent <= 0.20:
+        return 2
+    if ratio_percent <= 0.33:
+        return 3
+    if ratio_percent <= 0.50:
+        return 4
+    if ratio_percent <= 0.68:
+        return 5
+    if ratio_percent <= 0.92:
+        return 6
+    if ratio_percent <= 1.21:
+        return 7
+    return 8
+
+
+def strip_known_prefixes(key: str) -> str:
+    changed = True
+    while changed:
+        changed = False
+        for prefix in ("module.", "model.", "net."):
+            if key.startswith(prefix):
+                key = key[len(prefix):]
+                changed = True
+    return key
+
+
+def extract_state_dict(checkpoint) -> dict[str, torch.Tensor]:
+    if isinstance(checkpoint, dict):
+        for key in ("model_state_dict", "state_dict", "model", "net"):
+            if key in checkpoint and isinstance(checkpoint[key], dict):
+                checkpoint = checkpoint[key]
+                break
+
+    if not isinstance(checkpoint, dict):
+        raise TypeError("checkpoint is not a state_dict-like object")
+
+    state = {}
+    for raw_key, value in checkpoint.items():
+        if not torch.is_tensor(value):
+            continue
+        key = strip_known_prefixes(str(raw_key))
+        if key.startswith("mask_values"):
+            continue
+        state[key] = value
+
+    if "fc.weight" not in state and "classifier.weight" in state:
+        state["fc.weight"] = state.pop("classifier.weight")
+        if "classifier.bias" in state:
+            state["fc.bias"] = state.pop("classifier.bias")
+
+    return state
+
+
+def infer_resnet_arch(state: dict[str, torch.Tensor]) -> list[str]:
+    fc_weight = state.get("fc.weight")
+    if fc_weight is None:
+        raise KeyError("checkpoint does not contain fc.weight/classifier.weight")
+
+    def layer_block_count(layer_name: str) -> int:
+        pattern = re.compile(rf"^{layer_name}\.(\d+)\.")
+        max_index = -1
+        for key in state:
+            match = pattern.match(key)
+            if match:
+                max_index = max(max_index, int(match.group(1)))
+        return max_index + 1
+
+    fc_in = int(fc_weight.shape[1])
+    layer3_blocks = layer_block_count("layer3")
+    preferred: list[str] = []
+
+    if fc_in == 2048:
+        if layer3_blocks >= 36:
+            preferred.append("resnet152")
+        elif layer3_blocks >= 23:
+            preferred.append("resnet101")
+        else:
+            preferred.append("resnet50")
+        preferred.extend(["resnet101", "resnet50", "resnet152"])
+    elif fc_in == 512:
+        if layer3_blocks >= 6:
+            preferred.append("resnet34")
+        else:
+            preferred.append("resnet18")
+        preferred.extend(["resnet34", "resnet18"])
     else:
-        img_rs = T.Resize((size, size))(img_pil)
-        tensor = T.ToTensor()(img_rs).unsqueeze(0)
-        return tensor, None
+        preferred.extend(["resnet101", "resnet50"])
 
-# =============================
-# 模型加载（启动时）
-# =============================
-# 1) 分类模型 ResNet50
-if not os.path.exists(CLASS_MODEL_PATH):
-    raise FileNotFoundError(f"分类模型文件不存在: {CLASS_MODEL_PATH}")
+    deduped = []
+    for name in preferred:
+        if name not in deduped:
+            deduped.append(name)
+    return deduped
 
-clf_model = models.resnet50(weights=None)  # 避免 deprecated pretrained 警告
-clf_model.fc = nn.Linear(2048, NUM_CLASSES)
-clf_state = torch.load(CLASS_MODEL_PATH, map_location="cpu")
-clf_model.load_state_dict(clf_state, strict=False)
-clf_model.eval().to(DEVICE)
 
-clf_transform = T.Compose([
-    T.Resize(256),
-    T.CenterCrop(224),
+def build_resnet_classifier(state: dict[str, torch.Tensor]):
+    builders = {
+        "resnet18": models.resnet18,
+        "resnet34": models.resnet34,
+        "resnet50": models.resnet50,
+        "resnet101": models.resnet101,
+        "resnet152": models.resnet152,
+    }
+    num_classes = int(state["fc.weight"].shape[0])
+    errors = []
+
+    for arch_name in infer_resnet_arch(state):
+        model = builders[arch_name](weights=None)
+        model.fc = nn.Linear(model.fc.in_features, num_classes)
+        try:
+            model.load_state_dict(state, strict=True)
+            return model, arch_name, num_classes
+        except RuntimeError as exc:
+            errors.append(f"{arch_name}: {exc}")
+
+    raise RuntimeError("unable to load color checkpoint as a supported ResNet: " + " | ".join(errors[:2]))
+
+
+def load_color_model(path: str):
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"color model file not found: {path}")
+
+    checkpoint = torch.load(path, map_location="cpu")
+    state = extract_state_dict(checkpoint)
+    model, arch_name, num_classes = build_resnet_classifier(state)
+
+    if len(COLOR_GRADE_LABELS) != num_classes:
+        raise ValueError(
+            f"COLOR_GRADE_LABELS has {len(COLOR_GRADE_LABELS)} labels, "
+            f"but checkpoint has {num_classes} classes"
+        )
+
+    model.eval().to(DEVICE)
+    return model, arch_name, num_classes
+
+
+def load_unet_model(path: str, model_name: str, bilinear: bool):
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"{model_name} UNet weights not found: {path}")
+
+    model = UNet(n_channels=3, n_classes=1, bilinear=bilinear)
+    checkpoint = torch.load(path, map_location="cpu")
+    state = extract_state_dict(checkpoint)
+
+    try:
+        model.load_state_dict(state, strict=True)
+    except RuntimeError as strict_error:
+        missing, unexpected = model.load_state_dict(state, strict=False)
+        if missing:
+            raise RuntimeError(
+                f"{model_name} UNet checkpoint is missing required keys: {missing[:8]}"
+            ) from strict_error
+        if unexpected:
+            print(f"[WARN] {model_name} UNet ignored unexpected keys: {unexpected[:8]}")
+
+    model.eval().to(DEVICE)
+    return model
+
+
+color_model, COLOR_ARCH_NAME, COLOR_NUM_CLASSES = load_color_model(COLOR_MODEL_PATH)
+cotton_model = load_unet_model(COTTON_UNET_WEIGHTS, "cotton", COTTON_BILINEAR_UP)
+impurity_model = load_unet_model(IMPURITY_UNET_WEIGHTS, "impurity", IMPURITY_BILINEAR_UP)
+
+color_transform = T.Compose([
+    T.Resize(COLOR_RESIZE_SIZE),
+    T.CenterCrop(COLOR_IMG_SIZE),
     T.ToTensor(),
     T.Normalize(mean=[0.485, 0.456, 0.406],
-                std =[0.229, 0.224, 0.225]),
+                std=[0.229, 0.224, 0.225]),
 ])
 
-# 2) 分割模型 UNet
-if not os.path.exists(UNET_WEIGHTS):
-    raise FileNotFoundError(f"UNet 权重不存在: {UNET_WEIGHTS}")
 
-seg_model = UNet(n_channels=3, n_classes=1, bilinear=BILINEAR_UP)
-seg_state = torch.load(UNET_WEIGHTS, map_location="cpu")
-if isinstance(seg_state, dict) and "mask_values" in seg_state:
-    seg_state = {k: v for k, v in seg_state.items() if k != "mask_values"}
-try:
-    seg_model.load_state_dict(seg_state, strict=False)
-except Exception:
-    seg_model.load_state_dict(seg_state.get("state_dict", seg_state), strict=False)
-seg_model.eval().to(DEVICE)
+def autocast_context():
+    return torch.autocast(device_type=DEVICE.type, enabled=(USE_AMP and DEVICE.type == "cuda"))
 
-# =============================
-# 杂质分割（OpenCV：ROI + 下采样 + 可选 DoG）
-# 仅在 ROI 上处理，显著减小复杂度；面积按 scale^2 还原
-# =============================
-def segment_impurities_roi(img_bgr: np.ndarray,
-                           cotton_mask_u8: np.ndarray,
-                           fast: bool = False):
-    H, W = img_bgr.shape[:2]
-    m = cotton_mask_u8 > 0
-    ys, xs = np.where(m)
-    if len(xs) == 0:
-        # 无棉花，直接返回
-        clean_full = np.zeros((H, W), dtype=np.uint8)
-        ov_full = np.zeros_like(img_bgr)
-        return clean_full, ov_full, 0
 
-    # 1) 取棉花 bbox（ROI）
-    x0, x1 = xs.min(), xs.max() + 1
-    y0, y1 = ys.min(), ys.max() + 1
-    roi_bgr  = img_bgr[y0:y1, x0:x1].copy()
-    roi_mask = cotton_mask_u8[y0:y1, x0:x1].copy()
+@torch.inference_mode()
+def infer_color_grade(img_pil: Image.Image):
+    inp = color_transform(img_pil).unsqueeze(0).to(DEVICE)
+    with autocast_context():
+        logits = color_model(inp)[0]
+        probs = torch.softmax(logits, dim=0)
+    conf, idx = torch.max(probs, 0)
+    class_index = int(idx.item())
+    return int(COLOR_GRADE_LABELS[class_index]), class_index, float(conf.item())
 
-    # 2) 下采样（长边限制）
-    max_side = ROI_MAX_SIDE_FAST if fast else ROI_MAX_SIDE_NORMAL
-    rh, rw = roi_bgr.shape[:2]
-    scale = 1.0
-    if max(rh, rw) > max_side:
-        scale = max_side / float(max(rh, rw))
-        roi_bgr  = cv2.resize(roi_bgr, (int(rw*scale), int(rh*scale)), interpolation=cv2.INTER_AREA)
-        roi_mask = cv2.resize(roi_mask, (roi_bgr.shape[1], roi_bgr.shape[0]), interpolation=cv2.INTER_NEAREST)
 
-    rm = roi_mask > 0
+@torch.inference_mode()
+def infer_unet_mask(
+    img_pil: Image.Image,
+    model,
+    img_size: int,
+    keep_ratio: bool,
+    threshold: float,
+) -> np.ndarray:
+    tensor, lb_params = pil_to_tensor_01(img_pil, img_size, keep_ratio)
+    tensor = tensor.to(DEVICE, non_blocking=(DEVICE.type == "cuda"))
 
-    # 3) 颜色先验（踢掉“像棉花”的）
-    hsv = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2HSV)
-    _, Sc, Vc = cv2.split(hsv)
-    lab = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2Lab)
-    L, a, b = cv2.split(lab)
-    chroma = np.sqrt((a.astype(np.float32)-128.0)**2 + (b.astype(np.float32)-128.0)**2)
-    HSV_S_MIN, HSV_V_MAX = 60, 150
-    LAB_L_MAX, LAB_CHROMA_MIN = 185, 32
-    color_gate = (
-                         ((Sc >= HSV_S_MIN) & (Vc <= HSV_V_MAX)) |
-                         ((L <= LAB_L_MAX) | (chroma >= LAB_CHROMA_MIN))
-                 ).astype(np.uint8) * 255
-    color_gate[~rm] = 0
+    with autocast_context():
+        logits = model(tensor)
+        logits = torch.clamp(logits, -30, 30)
+        probs = torch.sigmoid(logits)
+        pred = (probs > threshold).float()
 
-    # 4) 灰度 + 自适应阈值 + OPEN
-    gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
-    gray_m = np.zeros_like(gray); gray_m[rm] = gray[rm]
-    blur = cv2.medianBlur(gray_m, 5)
-    raw = cv2.adaptiveThreshold(
-        blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV,
-        blockSize=25, C=10
+    pred_np = pred[0, 0].detach().cpu().numpy()
+    if lb_params is not None:
+        return unletterbox_mask(pred_np, img_pil.size, lb_params)
+    return resize_mask_to_original(pred_np, img_pil.size)
+
+
+def infer_impurity_in_cotton(img_pil: Image.Image, cotton_mask: np.ndarray) -> np.ndarray:
+    crop, bbox = crop_to_mask_bbox(img_pil, cotton_mask, IMPURITY_ROI_MARGIN)
+    if crop is None or bbox is None:
+        return np.zeros_like(cotton_mask, dtype=np.uint8)
+
+    impurity_crop = infer_unet_mask(
+        crop,
+        impurity_model,
+        IMPURITY_IMG_SIZE,
+        IMPURITY_KEEP_RATIO,
+        IMPURITY_THRESH,
     )
-    raw[~rm] = 0
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-    opened = cv2.morphologyEx(raw, cv2.MORPH_OPEN, kernel, iterations=1)
-    opened = cv2.bitwise_and(opened, color_gate)
+    impurity_crop = smooth_binary_mask(impurity_crop)
+    impurity_full = paste_mask_to_original(impurity_crop, bbox, cotton_mask.shape)
+    impurity_full = ((impurity_full > 0) & (cotton_mask > 0)).astype(np.uint8)
+    return impurity_full
 
-    # 5) 边界距离抑制（在 ROI 上做）
-    dist = cv2.distanceTransform((rm.astype(np.uint8))*255, cv2.DIST_L2, 3)
-    border_mask = (dist >= BORDER_MIN_DIST).astype(np.uint8) * 255
-    opened = cv2.bitwise_and(opened, border_mask)
 
-    # 6) 可选 DoG gate（fast=1 时默认关闭）
-    use_blob_gate = USE_BLOB_GATE_FAST if fast else USE_BLOB_GATE_NORM
-    if use_blob_gate:
-        def _dog(img_f, s):
-            g_small = cv2.GaussianBlur(img_f, (0, 0), sigmaX=s/np.sqrt(2))
-            g_large = cv2.GaussianBlur(img_f, (0, 0), sigmaX=s*np.sqrt(2))
-            return (g_small - g_large)
+def build_image_payload(img_pil: Image.Image, cotton_mask: np.ndarray, impurity_mask: np.ndarray):
+    cotton_mask_url = mask_to_dataurl(cotton_mask)
+    impurity_mask_url = mask_to_dataurl(impurity_mask)
+    cotton_overlay_url = image_to_dataurl(
+        overlay_color(img_pil, cotton_mask, color=(255, 0, 0), alpha=0.35),
+        fmt="JPEG",
+        quality=85,
+    )
+    impurity_overlay_url = image_to_dataurl(
+        overlay_color(img_pil, impurity_mask, color=(255, 0, 0), alpha=0.45),
+        fmt="JPEG",
+        quality=85,
+    )
+    black_bg_url = image_to_dataurl(
+        overlay_black_bg_keep_cotton_with_impurity(img_pil, cotton_mask, impurity_mask, alpha=0.45),
+        fmt="JPEG",
+        quality=85,
+    )
 
-        inv = 255 - gray_m
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        inv_eq = clahe.apply(inv)
-        invf = inv_eq.astype(np.float32)
-        mu, sd = invf[rm].mean(), invf[rm].std() + 1e-6
-        invf = (invf - mu) / sd
+    return {
+        "cottonMaskImage": cotton_mask_url,
+        "impurityMaskImage": impurity_mask_url,
+        "cottonOverlayImage": cotton_overlay_url,
+        "impurityOverlayImage": impurity_overlay_url,
+        "blackBackgroundImpurityOverlay": black_bg_url,
+        "cottonAreaImage": cotton_overlay_url,
+        "impurityAreaImage": impurity_mask_url,
+    }
 
-        sigmas = DOG_SIGMAS_FAST if fast else DOG_SIGMAS_NORM
-        resp_max = np.zeros_like(invf, dtype=np.float32)
-        for s in sigmas:
-            resp_max = np.maximum(resp_max, _dog(invf, s))
-        vals = resp_max[rm]
-        blob_gate = np.zeros_like(gray_m, dtype=np.uint8)
-        for pct in TOP_KEEP_PCTS:
-            thr = float(np.percentile(vals, 100.0 - pct))
-            cand = (resp_max >= thr).astype(np.uint8) * 255
-            cand[~rm] = 0
-            cand = cv2.dilate(cand, kernel, iterations=1)
-            if (cand.sum() // 255) >= 50:
-                blob_gate = cand
-                break
-        if blob_gate.sum() == 0:
-            blob_gate = (rm.astype(np.uint8)) * 255
-    else:
-        blob_gate = (rm.astype(np.uint8)) * 255
 
-    # 7) 几何过滤 + gate 重叠（在 ROI 上）
-    def shape_and_gate_filter(bin_img):
-        out = np.zeros_like(bin_img)
-        num, labels, stats, _ = cv2.connectedComponentsWithStats(bin_img, connectivity=8)
-        for i in range(1, num):
-            x, y, w, h, area = stats[i]
-            if area < MIN_AREA:
-                continue
-            if x == 0 or y == 0 or (x + w) >= bin_img.shape[1] or (y + h) >= bin_img.shape[0]:
-                continue
-            comp = (labels == i).astype(np.uint8) * 255
-            inter = cv2.bitwise_and(comp, blob_gate)
-            if (inter > 0).sum() / max(1, (comp > 0).sum()) < 0.08:
-                continue
-            contours, _ = cv2.findContours(comp, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            if not contours:
-                continue
-            cnt = max(contours, key=cv2.contourArea)
-            A = cv2.contourArea(cnt); P = cv2.arcLength(cnt, True)
-            if P == 0:
-                continue
-            circularity = (4.0 * np.pi * A) / (P * P)
-            x0, y0, w0, h0 = cv2.boundingRect(cnt)
-            aspect = max(w0, h0) / max(1, min(w0, h0))
-            hull = cv2.convexHull(cnt); hull_area = cv2.contourArea(hull)
-            solidity = 0.0 if hull_area <= 0 else A / hull_area
-            if aspect > MAX_ASPECT or circularity < MIN_CIRC or solidity < MIN_SOLIDITY:
-                continue
-            out[labels == i] = 255
-        return out
+def empty_image_payload():
+    return {
+        "cottonMaskImage": None,
+        "impurityMaskImage": None,
+        "cottonOverlayImage": None,
+        "impurityOverlayImage": None,
+        "blackBackgroundImpurityOverlay": None,
+        "cottonAreaImage": None,
+        "impurityAreaImage": None,
+    }
 
-    clean_roi = shape_and_gate_filter(opened)
+def request_too_large_response():
+    result = {
+        "error": "图片文件过大",
+        "detectionResult": {
+            "colorGrade": -1,
+            "impurityGrade": -1,
+            "cottonArea": 0.0,
+            "impurityArea": 0,
+            "areaRatio": 0.0,
+            "confidence": 0.0,
+        },
+        "label": "Error",
+        "confidence": 0.0,
+    }
+    result.update(empty_image_payload())
+    return result
 
-    # 8) 还原到原图尺寸 & 叠加
-    # 面积按 scale^2 还原
-    impurity_area_roi = int((clean_roi > 0).sum())
-    if scale != 1.0:
-        impurity_area_full = int(round(impurity_area_roi / (scale * scale)))
-    else:
-        impurity_area_full = impurity_area_roi
 
-    # 将 ROI clean 放回原图坐标
-    clean_full = np.zeros((H, W), dtype=np.uint8)
-    if scale != 1.0:
-        # 需要把 clean_roi 放大回 ROI 原尺寸
-        clean_up = cv2.resize(clean_roi, (rw, rh), interpolation=cv2.INTER_NEAREST)
-    else:
-        clean_up = clean_roi
-    clean_full[y0:y1, x0:x1] = clean_up
+@app.errorhandler(413)
+def request_entity_too_large(_exc):
+    return jsonify(request_too_large_response()), 413
 
-    ov_full = img_bgr.copy()
-    contours, _ = cv2.findContours(clean_full, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    cv2.drawContours(ov_full, contours, -1, (0, 0, 255), 1)
-    ov_full[cotton_mask_u8 == 0] = 0
 
-    return clean_full, ov_full, impurity_area_full
-
-# =============================
-# 推理接口
-# =============================
 @app.route("/predict", methods=["POST"])
 def predict():
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
 
-    # 向后兼容的 query 开关（?images=0 关闭返回图）
     include_images_query = request.args.get("images", "1") != "0"
-    fast_mode            = request.args.get("fast",   "0") == "1"
-
-    # 推荐的“无图开关”：表单字段 returnImages=false（默认 true）
-    # 允许前端控制是否返回图片（默认 true）
     return_images_form = request.form.get("returnImages", "true").lower() == "true"
-
-    # 只有当两者都允许时才返回图像（同时兼容新老开关）
     include_images = include_images_query and return_images_form
+    fast_mode = request.args.get("fast", "0") == "1"
 
     file = request.files["file"]
     try:
         t0 = time.time()
 
-        # 读原图
-        img_pil = Image.open(file.stream).convert("RGB")
-        orig_w, orig_h = img_pil.size
-        orig_area = max(1, orig_w * orig_h)  # 防 0
+        source_img = Image.open(file.stream)
+        if source_img.format not in ALLOWED_IMAGE_FORMATS:
+            raise ValueError("unsupported image format")
 
-        # -------- 1) 分类（ResNet50）--------
-        with torch.inference_mode():
-            inp_clf = clf_transform(img_pil).unsqueeze(0).to(DEVICE)
-            with torch.autocast(device_type=("cuda" if DEVICE == "cuda" else "cpu"), enabled=(USE_AMP and DEVICE=="cuda")):
-                logits = clf_model(inp_clf)[0]
-                probs = torch.softmax(logits, dim=0)
-            conf, idx = torch.max(probs, 0)
-            grade_num = int(idx.item())        # 数字类别
-            confidence = float(conf.item())    # 置信度
+        orig_w, orig_h = source_img.size
+        if orig_w * orig_h > MAX_IMAGE_PIXELS:
+            raise ValueError("image dimensions are too large")
+
+        img_pil = source_img.convert("RGB")
+        orig_area = max(1, orig_w * orig_h)
+
+        color_grade, color_index, confidence = infer_color_grade(img_pil)
         t1 = time.time()
 
-        # -------- 2) 棉花分割（UNet）--------
-        with torch.inference_mode():
-            inp_seg, lb_params = pil_to_tensor_01(img_pil, IMG_SIZE, KEEP_RATIO)
-            inp_seg = inp_seg.to(DEVICE)
-            with torch.autocast(device_type=("cuda" if DEVICE == "cuda" else "cpu"), enabled=(USE_AMP and DEVICE=="cuda")):
-                logit = seg_model(inp_seg)
-                logit = torch.clamp(logit, -30, 30)
-                prob = torch.sigmoid(logit)
-                pred = (prob > THRESH).float()
-
-        pred_np = pred[0, 0].detach().cpu().numpy()
-        if lb_params is not None:
-            cotton_mask = unletterbox_mask(pred_np, (orig_w, orig_h), lb_params)  # 0/1
-        else:
-            pil_rs = T.Resize((orig_h, orig_w), interpolation=T.InterpolationMode.NEAREST)(
-                Image.fromarray((pred_np * 255).astype(np.uint8))
-            )
-            cotton_mask = (np.array(pil_rs) > 127).astype(np.uint8)
-        cotton_mask_u8   = (cotton_mask * 255).astype(np.uint8)
-        cotton_area_count = int((cotton_mask > 0).sum())   # 棉花像素个数（内部使用）
-        cotton_area_pct   = (float(cotton_area_count) / float(orig_area)) * 100.0  # 输出给前端（百分比 0~100）
+        cotton_mask = infer_unet_mask(
+            img_pil,
+            cotton_model,
+            COTTON_IMG_SIZE,
+            COTTON_KEEP_RATIO,
+            COTTON_THRESH,
+        )
+        cotton_mask = smooth_binary_mask(cotton_mask)
+        cotton_area_count = int((cotton_mask > 0).sum())
+        cotton_area_pct = (float(cotton_area_count) / float(orig_area)) * 100.0
         t2 = time.time()
 
-        # 叠加图（按开关返回或置空）
-        if include_images:
-            cotton_overlay = overlay_color(img_pil, cotton_mask, color=(255, 0, 0), alpha=0.4)
-            cotton_overlay_url = image_to_dataurl(cotton_overlay, fmt="JPEG", quality=85)
-        else:
-            cotton_overlay_url = None
-
-        # -------- 3) 杂质分割（ROI + 下采样，加速）--------
-        img_bgr = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
-        impurity_bin, impurity_overlay_bgr, impurity_area_px = segment_impurities_roi(
-            img_bgr, cotton_mask_u8, fast=fast_mode
-        )
-
-        # 面积比：杂质面积 / 棉花面积（注意：不是相对原图）
-        area_ratio = float(impurity_area_px) / max(1, float(cotton_area_count))
-
-        if include_images:
-            # 返回黑白掩模（PNG，灰度），非棉花区域为黑
-            impurity_mask_url = mask_to_dataurl(impurity_bin)
-        else:
-            impurity_mask_url = None
+        impurity_mask = infer_impurity_in_cotton(img_pil, cotton_mask)
+        impurity_area_px = int((impurity_mask > 0).sum())
+        area_ratio = float(impurity_area_px) / max(1.0, float(cotton_area_count))
+        impurity_grade = classify_impurity_ratio(area_ratio * 100.0)
         t3 = time.time()
 
-        # -------- 4) 返回结果 --------
         result = {
             "detectionResult": {
-                "colorGrade": grade_num,         # = ResNet50 argmax 索引
-                "impurityGrade": grade_num,      # 同上（按你的要求）
-                "cottonArea": round(cotton_area_pct, 6),   # 棉花占原图百分比（0~100）
-                "impurityArea": int(impurity_area_px),     # 杂质像素个数
-                "areaRatio": round(area_ratio, 6),         # 杂质面积 / 棉花面积
-                "confidence": round(confidence, 4)
+                "colorGrade": color_grade,
+                "impurityGrade": impurity_grade,
+                "cottonArea": round(cotton_area_pct, 6),
+                "impurityArea": impurity_area_px,
+                "areaRatio": round(area_ratio, 6),
+                "confidence": round(confidence, 4),
             },
-            # ===== 向后兼容：供 Spring 旧字段读取 =====
-            "label": grade_num,
+            "label": color_grade,
             "confidence": round(confidence, 4),
-            # 可选：返回耗时（便于调试）
             "timing": {
                 "classify_sec": round(t1 - t0, 3),
-                "unet_sec":     round(t2 - t1, 3),
-                "impurity_sec": round(t3 - t2, 3),
-                "total_sec":    round(t3 - t0, 3),
-                "fast_mode":    bool(fast_mode)
-            }
+                "cotton_unet_sec": round(t2 - t1, 3),
+                "impurity_unet_sec": round(t3 - t2, 3),
+                "total_sec": round(t3 - t0, 3),
+                "fast_mode": bool(fast_mode),
+            },
+            "modelInfo": {
+                "colorModel": os.path.basename(COLOR_MODEL_PATH),
+                "colorArch": COLOR_ARCH_NAME,
+                "cottonModel": os.path.basename(COTTON_UNET_WEIGHTS),
+                "impurityModel": os.path.basename(IMPURITY_UNET_WEIGHTS),
+            },
         }
 
-        # 图片（按无图开关/向后兼容开关）
-        if include_images:
-            result["cottonAreaImage"]   = cotton_overlay_url        # 叠加图（JPEG）
-            result["impurityAreaImage"] = impurity_mask_url         # 二值掩模（PNG）
-        else:
-            result["cottonAreaImage"]   = None
-            result["impurityAreaImage"] = None
-
+        result.update(build_image_payload(img_pil, cotton_mask, impurity_mask) if include_images else empty_image_payload())
         return jsonify(result), 200
 
-    except Exception as e:
-        return jsonify({
-            "error": str(e),
-            "cottonAreaImage": None,
-            "impurityAreaImage": None,
+    except Exception as exc:
+        print(f"[ERROR] predict failed: {exc}")
+        result = {
+            "error": "模型推理失败，请检查图片后重试",
             "detectionResult": {
                 "colorGrade": -1,
                 "impurityGrade": -1,
-                "cottonArea": 0.0,   # 异常情况下置 0
+                "cottonArea": 0.0,
                 "impurityArea": 0,
                 "areaRatio": 0.0,
-                "confidence": 0.0
+                "confidence": 0.0,
             },
             "label": "Error",
-            "confidence": 0.0
-        }), 500
+            "confidence": 0.0,
+        }
+        result.update(empty_image_payload())
+        return jsonify(result), 500
+
 
 @app.route("/health")
 def health():
-    return jsonify({"status": "ok", "model": "ResNet50 + UNet + CV(ROI/downsample)"}), 200
+    return jsonify({
+        "status": "ok",
+        "model": "ResNet color + UNet cotton + UNet impurity",
+        "colorModel": os.path.basename(COLOR_MODEL_PATH),
+        "colorArch": COLOR_ARCH_NAME,
+        "cottonModel": os.path.basename(COTTON_UNET_WEIGHTS),
+        "impurityModel": os.path.basename(IMPURITY_UNET_WEIGHTS),
+        "device": DEVICE.type,
+    }), 200
+
 
 if __name__ == "__main__":
-    # 生产建议用 gunicorn 部署，例如：
-    # gunicorn -w 2 -k gthread -t 120 -b 0.0.0.0:5000 model_service2:app
     app.run(host="0.0.0.0", port=5000, threaded=True)

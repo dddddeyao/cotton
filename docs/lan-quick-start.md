@@ -4,7 +4,7 @@
 
 ```text
 BACKEND_PUBLIC_PORT=8080
-MYSQL_PUBLIC_PORT=127.0.0.1:3307
+MYSQL_PUBLIC_PORT=127.0.0.1:3306
 ```
 
 也就是说，局域网 Android 端访问后端时使用 `:8080`。
@@ -20,6 +20,26 @@ open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specifie
 ```
 
 ## 2. 启动服务
+
+第一次部署前，先复制局域网模板并填写真实配置：
+
+```powershell
+Copy-Item .env.lan.example .env
+```
+
+必须修改 `.env` 中的数据库密码和 `JWT_SECRET`：
+
+```text
+MYSQL_PASSWORD=换成你自己的数据库密码
+MYSQL_ROOT_PASSWORD=换成你自己的数据库 root 密码
+JWT_SECRET=换成 Base64 编码的 HMAC 密钥
+```
+
+PowerShell 生成 `JWT_SECRET`：
+
+```powershell
+[Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+```
 
 在项目根目录执行：
 
@@ -65,7 +85,6 @@ apps/android/.env.local
 
 ```text
 EXPO_PUBLIC_API_BASE_URL=http://192.168.1.100:8080
-EXPO_PUBLIC_MOCK_WHEN_API_UNAVAILABLE=false
 EXPO_PUBLIC_REQUEST_TIMEOUT_MS=15000
 EXPO_PUBLIC_RECOGNITION_TIMEOUT_MS=30000
 EXPO_PUBLIC_RECOGNITION_UPLOAD_FIELD_NAME=file
@@ -81,4 +100,4 @@ Windows 防火墙需要允许入站 TCP：
 8080
 ```
 
-不需要对外开放 `5000`、`3307`。
+不需要对外开放 `5000`、`3306`。

@@ -21,8 +21,17 @@
 服务器上需要包含完整项目目录，并确认以下模型权重存在：
 
 ```text
-services/backend/model-service-python/cotton-best.pth
+services/backend/model-service-python/fourtime-best.pth
 services/backend/model-service-python/fenge_best.pth
+services/backend/model-service-python/impurityarea_best.pth
+```
+
+模型服务当前使用三类权重：
+
+```text
+fourtime-best.pth          # 颜色识别，默认输出 11/21/31/41/51/61/71
+fenge_best.pth             # 棉花区域分割；如果交付包中 cottonarea_best.pth 与它等价，可复制或重命名为 fenge_best.pth
+impurityarea_best.pth      # 杂质区域分割
 ```
 
 复制环境变量模板：
@@ -45,7 +54,7 @@ APP_CORS_ALLOWED_ORIGINS
 APP_CORS_ALLOW_CREDENTIALS
 ```
 
-`JWT_SECRET` 必须是 Base64 编码的 HMAC 密钥。项目使用 Bearer Token 认证，默认不需要跨域携带 Cookie，`APP_CORS_ALLOW_CREDENTIALS` 建议保持 `false`。模型推理可能较慢，`PYTHON_SERVICE_READ_TIMEOUT_MS` 默认 180000 毫秒，可按服务器性能调整。
+`JWT_SECRET` 必须显式配置为 Base64 编码的 HMAC 密钥，解码后至少 32 字节；未配置时后端会启动失败，Docker Compose 也会直接阻止启动。Linux/macOS 可用 `openssl rand -base64 32` 生成；Windows PowerShell 可用 `[Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))` 生成。项目使用 Bearer Token 认证，默认不需要跨域携带 Cookie，`APP_CORS_ALLOW_CREDENTIALS` 建议保持 `false`。模型推理可能较慢，`PYTHON_SERVICE_READ_TIMEOUT_MS` 默认 180000 毫秒，可按服务器性能调整。
 
 ## 单机 Docker 部署
 
@@ -86,14 +95,12 @@ Android 打包前，在 `apps/android/.env.local` 中配置：
 
 ```text
 EXPO_PUBLIC_API_BASE_URL=http://服务器IP:8080
-EXPO_PUBLIC_MOCK_WHEN_API_UNAVAILABLE=false
 ```
 
 如果使用 HTTPS 域名：
 
 ```text
 EXPO_PUBLIC_API_BASE_URL=https://cotton.example.com
-EXPO_PUBLIC_MOCK_WHEN_API_UNAVAILABLE=false
 ```
 
 环境变量会在构建时注入，因此改地址后需要重新打包 APK。
@@ -104,8 +111,16 @@ EXPO_PUBLIC_MOCK_WHEN_API_UNAVAILABLE=false
 
 ```text
 1. 检查 model-service 容器是否启动并 healthy。
-2. 检查 cotton-best.pth 和 fenge_best.pth 是否存在。
+2. 检查 fourtime-best.pth、fenge_best.pth 和 impurityarea_best.pth 是否存在，并已被 docker-compose 挂载。
 3. 查看 docker compose logs -f backend 和 docker compose logs -f model-service。
+```
+
+识别返回图像为空时：
+
+```text
+1. 确认请求没有使用 images=0 或 returnImages=false。
+2. 确认前端/后端读取的是 cottonMaskImage、impurityMaskImage、cottonOverlayImage、impurityOverlayImage、blackBackgroundImpurityOverlay。
+3. 如需减少响应体体积，可关闭返回图像，但结果页将无法展示掩模和叠加图。
 ```
 
 如果登录或新闻失败：

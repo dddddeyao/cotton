@@ -1,13 +1,19 @@
 package com.example.springbootpythonml.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class DetectionResult {
+    @JsonAlias("color_grade")
     private Integer colorGrade;     // = Flask 返回的数字类别
+    @JsonAlias("impurity_grade")
     private Integer impurityGrade;  // = Flask 返回的数字类别
+    @JsonAlias("cotton_area")
     private Double cottonArea;      // 棉花区域百分比
+    @JsonAlias("impurity_area")
     private Integer impurityArea;   // 像素
+    @JsonAlias("area_ratio")
     private Double areaRatio;       // 占比
     private Double confidence;      // 置信度
 

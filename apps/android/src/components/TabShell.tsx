@@ -1,22 +1,40 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import React from 'react';
+import { Dimensions, Platform, Pressable, StatusBar as NativeStatusBar, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
-import { colors } from '../theme';
+import { colors, spacing } from '../theme';
 import { TabKey } from '../types';
 
 type TabConfig = {
   key: TabKey;
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
-  activeIcon: keyof typeof Ionicons.glyphMap;
 };
 
+const androidBottomInsetFallback = 16;
+const androidBottomInsetMax = 48;
+const tabBarHeight = 64;
+const tabBarBottomPadding = 8;
+const tabItemHeight = 50;
+
+function getAndroidBottomInset(windowHeight: number) {
+  if (Platform.OS !== 'android') {
+    return 0;
+  }
+
+  const screenHeight = Dimensions.get('screen').height;
+  const statusBarHeight = NativeStatusBar.currentHeight ?? 0;
+  const systemBarsHeight = Math.max(0, Math.round(screenHeight - windowHeight));
+  const navigationBarHeight = Math.max(0, systemBarsHeight - statusBarHeight);
+
+  return Math.min(Math.max(navigationBarHeight, androidBottomInsetFallback), androidBottomInsetMax);
+}
+
 const tabs: TabConfig[] = [
-  { key: 'news', label: '前沿瞭望', icon: 'globe-outline', activeIcon: 'globe' },
-  { key: 'standards', label: '分类标准', icon: 'book-outline', activeIcon: 'book' },
-  { key: 'recognition', label: '智能识别', icon: 'scan-outline', activeIcon: 'scan' },
-  { key: 'profile', label: '我的信息', icon: 'person-outline', activeIcon: 'person' },
+  { key: 'news', label: '前沿瞭望', icon: 'newspaper-outline' },
+  { key: 'standards', label: '分类标准', icon: 'library-outline' },
+  { key: 'recognition', label: '图像检测', icon: 'scan-outline' },
+  { key: 'profile', label: '我的信息', icon: 'person-circle-outline' },
 ];
 
 export function TabShell({
@@ -28,20 +46,27 @@ export function TabShell({
   onChangeTab: (tab: TabKey) => void;
   children: React.ReactNode;
 }) {
+  const { height } = useWindowDimensions();
+  const bottomInset = getAndroidBottomInset(height);
+
   return (
     <View style={styles.shell}>
       <View style={styles.content}>{children}</View>
-      <View style={styles.tabBar}>
+      <View style={[styles.tabBar, { minHeight: tabBarHeight + bottomInset, paddingBottom: tabBarBottomPadding + bottomInset }]}>
         {tabs.map((tab) => {
           const active = tab.key === activeTab;
 
           return (
-            <AnimatedTabItem
+            <Pressable
               key={tab.key}
-              tab={tab}
-              active={active}
+              style={[styles.tabItem, active && styles.tabItemActive]}
               onPress={() => onChangeTab(tab.key)}
-            />
+              accessibilityRole="button"
+              android_ripple={{ color: '#e7f4f8', borderless: false }}
+            >
+              <Ionicons name={tab.icon} size={20} color={active ? colors.primaryDark : colors.tabMuted} />
+              <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{tab.label}</Text>
+            </Pressable>
           );
         })}
       </View>
@@ -49,119 +74,49 @@ export function TabShell({
   );
 }
 
-function AnimatedTabItem({
-  tab,
-  active,
-  onPress,
-}: {
-  tab: TabConfig;
-  active: boolean;
-  onPress: () => void;
-}) {
-  const progress = useRef(new Animated.Value(active ? 1 : 0)).current;
-
-  useEffect(() => {
-    Animated.timing(progress, {
-      toValue: active ? 1 : 0,
-      duration: 180,
-      useNativeDriver: true,
-    }).start();
-  }, [active, progress]);
-
-  const inactiveOpacity = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 0],
-  });
-  const activeOpacity = progress;
-  const activeScale = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.88, 1],
-  });
-  const indicatorScale = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.35, 1],
-  });
-
-  return (
-    <Pressable
-      style={styles.tabItem}
-      onPress={onPress}
-      accessibilityRole="button"
-      android_ripple={{ color: '#ece4f5', borderless: true }}
-      hitSlop={8}
-    >
-      <View style={styles.iconStack}>
-        <Animated.View style={[styles.iconLayer, { opacity: inactiveOpacity }]}>
-          <Ionicons name={tab.icon} size={24} color={colors.tabMuted} />
-        </Animated.View>
-        <Animated.View style={[styles.iconLayer, { opacity: activeOpacity, transform: [{ scale: activeScale }] }]}>
-          <Ionicons name={tab.activeIcon} size={24} color={colors.primary} />
-        </Animated.View>
-      </View>
-      <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{tab.label}</Text>
-      <Animated.View
-        style={[
-          styles.tabIndicator,
-          {
-            opacity: activeOpacity,
-            transform: [{ scaleX: indicatorScale }],
-          },
-        ]}
-      />
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   shell: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
   },
   tabBar: {
-    minHeight: 76,
+    minHeight: tabBarHeight,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     borderTopWidth: 1,
-    borderTopColor: '#eee5f7',
-    backgroundColor: 'rgba(255, 251, 255, 0.96)',
-    paddingBottom: 8,
+    borderTopColor: colors.line,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 8,
+    paddingBottom: tabBarBottomPadding,
     paddingTop: 6,
+    position: 'relative',
+    overflow: 'hidden',
   },
   tabItem: {
-    width: 84,
-    minHeight: 60,
+    flex: 1,
+    height: tabItemHeight,
+    borderRadius: spacing.radius,
+    borderWidth: 1,
+    borderColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
+    gap: 2,
   },
-  iconStack: {
-    width: 28,
-    height: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconLayer: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
+  tabItemActive: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.line,
   },
   tabLabel: {
     color: colors.tabMuted,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  tabLabelActive: {
-    color: colors.primary,
+    fontSize: 11,
     fontWeight: '800',
   },
-  tabIndicator: {
-    width: 24,
-    height: 3,
-    borderRadius: 3,
-    backgroundColor: colors.primary,
-    marginTop: 2,
+  tabLabelActive: {
+    color: colors.primaryDark,
+    fontWeight: '900',
   },
 });

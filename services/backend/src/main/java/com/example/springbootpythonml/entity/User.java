@@ -39,9 +39,7 @@ public class User {
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = this.createdAt;
-        if (this.role == null || this.role.isBlank()) {
-            this.role = "研究人员";
-        }
+
     }
 
     @PreUpdate

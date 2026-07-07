@@ -1,11 +1,16 @@
-﻿export type TabKey = 'news' | 'standards' | 'recognition' | 'profile';
+export type TabKey = 'news' | 'standards' | 'recognition' | 'profile';
 
 export type NewsItem = {
   id: string;
   title: string;
   summary: string;
+  content: string;
   date: string;
   source: string;
+  sourceUrl: string;
+  imageUrl: string;
+  category: string;
+  keywords: string;
   tone: 'blue' | 'green' | 'orange' | 'purple';
 };
 
@@ -29,15 +34,19 @@ export type RecognitionResult = {
   imageUri: string;
   createdAt: string;
   grade: string;
-  confidence: number;
+  confidence: number | null;
   label: string;
   timestamp: string;
   filename: string;
+  cottonMaskImage: string | null;
+  impurityMaskImage: string | null;
+  cottonOverlayImage: string | null;
+  impurityOverlayImage: string | null;
+  blackBackgroundImpurityOverlay: string | null;
   cottonAreaImage: string | null;
   impurityAreaImage: string | null;
   detectionResult: DetectionResult;
   metrics: RecognitionMetric[];
-  details: RecognitionMetric[];
   conclusion: string;
   isLocal: boolean;
 };
@@ -59,10 +68,10 @@ export type RecognitionUploadFieldName = 'file' | 'image' | 'photo';
 
 export type AppView =
   | { name: 'tabs' }
+  | { name: 'newsDetail'; item: NewsItem }
   | { name: 'recognitionResult'; result: RecognitionResult; returnTo?: 'recognition' | 'history' }
   | { name: 'recognitionHistory' }
   | { name: 'editProfile' }
-  | { name: 'collection' }
   | { name: 'settings' }
   | { name: 'agreement'; kind: 'user' | 'privacy' };
 

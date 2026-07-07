@@ -4,6 +4,8 @@ import { NewsItem, RecognitionResult, UserProfile, UserSession } from '../types'
 
 type ProfileCache = Omit<UserProfile, 'username'>;
 
+const NEWS_CACHE_LIMIT = 100;
+
 const keys = {
   news: 'cotton.news.cache',
   history: 'cotton.recognition.history',
@@ -26,7 +28,7 @@ async function writeJson<T>(key: string, value: T): Promise<void> {
 
 export const cache = {
   getNews: () => readJson<NewsItem[]>(keys.news, []),
-  setNews: (items: NewsItem[]) => writeJson(keys.news, items),
+  setNews: (items: NewsItem[]) => writeJson(keys.news, items.slice(0, NEWS_CACHE_LIMIT)),
   getHistory: () => readJson<RecognitionResult[]>(keys.history, []),
   setHistory: (items: RecognitionResult[]) => writeJson(keys.history, items),
   getSession: () => readJson<UserSession | null>(keys.session, null),

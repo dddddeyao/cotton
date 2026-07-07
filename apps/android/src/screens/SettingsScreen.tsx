@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { SettingsRow, StackPage } from '../components/common';
 import { api } from '../services/api';
 import { colors, spacing } from '../theme';
 import { UserSession } from '../types';
+
+const androidBottomInset = Platform.OS === 'android' ? 34 : 0;
 
 export function SettingsScreen({
   session,
@@ -63,16 +65,16 @@ export function SettingsScreen({
 
   return (
     <StackPage title="应用设置" onBack={onBack}>
-      <View style={styles.page}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
+
         <SettingsRow
-          title="修改密码"
-          subtitle={isChangingPassword ? '正在提交...' : session ? '账号安全校验' : '登录后可用'}
+          title={isChangingPassword ? '正在提交...' : '修改密码'}
           disabled={isChangingPassword}
           onPress={() => setShowPasswordForm((value) => !value)}
         />
         {showPasswordForm ? (
           <View style={styles.passwordPanel}>
-            <Text style={styles.panelTitle}>修改密码</Text>
+
             <TextInput
               placeholder="当前密码"
               placeholderTextColor={colors.muted}
@@ -99,53 +101,54 @@ export function SettingsScreen({
             />
             <SettingsRow
               title={isChangingPassword ? '提交中...' : '提交修改'}
-              subtitle="修改成功后下次登录使用新密码"
               disabled={isChangingPassword}
               onPress={() => void changePassword()}
             />
           </View>
         ) : null}
-        <SettingsRow title="检查更新" subtitle="当前版本 1.0.0" onPress={() => Alert.alert('已是最新版本', '当前为开发版本 1.0.0。')} />
-        <SettingsRow title="清理缓存" subtitle="清除新闻缓存和本地临时识别记录" onPress={onClearCache} />
+        <SettingsRow title="清理缓存" onPress={onClearCache} />
         <SettingsRow
-          title="退出登录"
-          subtitle={isLoggingOut ? '正在退出...' : session ? `当前账号：${session.username}` : '当前未登录'}
+          title={isLoggingOut ? '正在退出...' : '退出登录'}
           danger
           disabled={isLoggingOut}
           onPress={session ? onLogout : () => Alert.alert('无需退出', '当前没有登录账号。')}
         />
-      </View>
+      </ScrollView>
     </StackPage>
   );
 }
 
 const styles = StyleSheet.create({
-  page: {
-    padding: spacing.page,
+  scroll: {
+    flex: 1,
+    backgroundColor: colors.background,
   },
+  page: {
+    flexGrow: 1,
+    padding: spacing.page,
+    paddingBottom: spacing.page + androidBottomInset,
+    backgroundColor: colors.background,
+  },
+
   passwordPanel: {
     borderRadius: spacing.radius,
     borderWidth: 1,
     borderColor: colors.line,
-    backgroundColor: colors.surfaceStrong,
+    backgroundColor: colors.surface,
     padding: 14,
     marginBottom: 12,
   },
-  panelTitle: {
-    color: colors.ink,
-    fontSize: 16,
-    fontWeight: '800',
-    marginBottom: 10,
-  },
+
   formInput: {
-    minHeight: 50,
+    minHeight: 48,
     borderRadius: spacing.radius,
-    backgroundColor: colors.background,
+    backgroundColor: '#f8fdff',
     borderWidth: 1,
     borderColor: colors.line,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     color: colors.ink,
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: '700',
     marginBottom: 10,
   },
 });

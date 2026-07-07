@@ -1,8 +1,7 @@
-﻿import { appConfig } from '../config';
-import { createMockRecognitionResult, mockNews } from '../data/mockData';
+import { appConfig } from '../config';
 import { cache } from '../storage/cache';
 import { NewsItem, RecognitionResult, UserProfile, UserSession } from '../types';
-import { ApiNetworkError, ApiUnavailableError, requestJson } from './http';
+import { requestJson } from './http';
 import {
   normalizeNewsList,
   normalizeProfile,
@@ -11,16 +10,16 @@ import {
   normalizeSession,
 } from './normalizers';
 
+type FetchNewsOptions = {
+  page?: number;
+  size?: number;
+};
+
 type UploadFile = {
   uri: string;
   name: string;
   type: string;
 };
-
-function shouldUseMock(error: unknown) {
-  return appConfig.mockWhenApiUnavailable
-    && (!appConfig.apiBaseUrl || error instanceof ApiUnavailableError || error instanceof ApiNetworkError);
-}
 
 function getFileNameFromUri(uri: string) {
   const cleanUri = uri.split('?')[0] ?? uri;
@@ -64,32 +63,23 @@ function createImageBase64Body(imageUri: string, imageBase64: string) {
     contentType: guessMimeType(fileName),
   });
 }
-function createLocalProfile(
-  username: string,
-  profile: Partial<Omit<UserProfile, 'username'>> = {}
-): UserProfile {
-  return {
-    username,
-    nickname: profile.nickname || '',
-    phone: profile.phone || '',
-    organization: profile.organization || '',
-    role: profile.role || '研究人员',
-  };
+
+function createNewsPath({ page = 1, size = 10 }: FetchNewsOptions = {}) {
+  const backendPage = Math.max(0, page - 1);
+  const query = new URLSearchParams({
+    page: String(backendPage),
+    size: String(size),
+    keywords: '棉花,海关,检测识别',
+  });
+  const separator = appConfig.endpoints.news.includes('?') ? '&' : '?';
+
+  return `${appConfig.endpoints.news}${separator}${query.toString()}`;
 }
 
 export const api = {
-  async fetchNews(): Promise<NewsItem[]> {
-    try {
-      const payload = await requestJson<unknown>(appConfig.endpoints.news);
-      const normalized = normalizeNewsList(payload);
-      return normalized.length > 0 ? normalized : mockNews;
-    } catch (error) {
-      if (shouldUseMock(error)) {
-        return mockNews;
-      }
-
-      throw error;
-    }
+  async fetchNews(options: FetchNewsOptions = {}): Promise<NewsItem[]> {
+    const payload = await requestJson<unknown>(createNewsPath(options));
+    return normalizeNewsList(payload);
   },
 
   async login(username: string, password: string): Promise<UserSession> {
@@ -97,28 +87,17 @@ export const api = {
       throw new Error('请输入账号和密码');
     }
 
-    try {
-      const payload = await requestJson<unknown>(appConfig.endpoints.login, {
-        method: 'POST',
-        body: JSON.stringify({ username, password }),
-      });
-      const session = normalizeSession(payload, username);
+    const payload = await requestJson<unknown>(appConfig.endpoints.login, {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    });
+    const session = normalizeSession(payload, username);
 
-      if (!session.token) {
-        throw new Error('登录接口未返回 token');
-      }
-
-      return session;
-    } catch (error) {
-      if (shouldUseMock(error)) {
-        return {
-          username,
-          token: `mock-token-${Date.now()}`,
-        };
-      }
-
-      throw error;
+    if (!session.token) {
+      throw new Error('登录接口未返回 token');
     }
+
+    return session;
   },
 
   async register(username: string, password: string): Promise<UserSession> {
@@ -126,31 +105,20 @@ export const api = {
       throw new Error('请输入用户名和密码');
     }
 
-    try {
-      const payload = await requestJson<unknown>(appConfig.endpoints.register, {
-        method: 'POST',
-        body: JSON.stringify({ username, password }),
-      });
-      const session = normalizeSession(payload, username);
+    const payload = await requestJson<unknown>(appConfig.endpoints.register, {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    });
+    const session = normalizeSession(payload, username);
 
-      if (!session.token) {
-        throw new Error('注册接口未返回 token');
-      }
-
-      return {
-        username: session.username || username,
-        token: session.token,
-      };
-    } catch (error) {
-      if (shouldUseMock(error)) {
-        return {
-          username,
-          token: `mock-token-${Date.now()}`,
-        };
-      }
-
-      throw error;
+    if (!session.token) {
+      throw new Error('注册接口未返回 token');
     }
+
+    return {
+      username: session.username || username,
+      token: session.token,
+    };
   },
 
   async logout(token?: string): Promise<void> {
@@ -158,82 +126,48 @@ export const api = {
       return;
     }
 
-    try {
-      await requestJson<unknown>(appConfig.endpoints.logout, {
-        method: 'POST',
-        token,
-      });
-    } catch (error) {
-      if (shouldUseMock(error)) {
-        return;
-      }
-
-      throw error;
-    }
+    await requestJson<unknown>(appConfig.endpoints.logout, {
+      method: 'POST',
+      token,
+    });
   },
 
   async changePassword(oldPassword: string, newPassword: string, token: string): Promise<void> {
-    try {
-      await requestJson(appConfig.endpoints.changePassword, {
-        method: 'POST',
-        token,
-        body: JSON.stringify({ oldPassword, newPassword }),
-      });
-    } catch (error) {
-      if (shouldUseMock(error)) {
-        return;
-      }
-
-      throw error;
-    }
+    await requestJson(appConfig.endpoints.changePassword, {
+      method: 'POST',
+      token,
+      body: JSON.stringify({ oldPassword, newPassword }),
+    });
   },
 
   async fetchProfile(session: UserSession): Promise<UserProfile> {
-    try {
-      const payload = await requestJson<unknown>(appConfig.endpoints.userProfile, {
-        token: session.token,
-      });
-      const profile = normalizeProfile(payload, session.username);
-      await cache.setProfile(session.username, {
-        nickname: profile.nickname,
-        phone: profile.phone,
-        organization: profile.organization,
-        role: profile.role,
-      });
-      return profile;
-    } catch (error) {
-      if (shouldUseMock(error)) {
-        const cachedProfile = await cache.getProfile(session.username);
-        return createLocalProfile(session.username, cachedProfile ?? {});
-      }
-
-      throw error;
-    }
+    const payload = await requestJson<unknown>(appConfig.endpoints.userProfile, {
+      token: session.token,
+    });
+    const profile = normalizeProfile(payload, session.username);
+    await cache.setProfile(session.username, {
+      nickname: profile.nickname,
+      phone: profile.phone,
+      organization: profile.organization,
+      role: profile.role,
+    });
+    return profile;
   },
 
   async updateProfile(session: UserSession, profile: Omit<UserProfile, 'username'>): Promise<UserProfile> {
-    try {
-      const payload = await requestJson<unknown>(appConfig.endpoints.userProfile, {
-        method: 'PUT',
-        token: session.token,
-        body: JSON.stringify(profile),
-      });
-      const savedProfile = normalizeProfile(payload, session.username);
-      await cache.setProfile(session.username, {
-        nickname: savedProfile.nickname,
-        phone: savedProfile.phone,
-        organization: savedProfile.organization,
-        role: savedProfile.role,
-      });
-      return savedProfile;
-    } catch (error) {
-      if (shouldUseMock(error)) {
-        await cache.setProfile(session.username, profile);
-        return createLocalProfile(session.username, profile);
-      }
-
-      throw error;
-    }
+    const payload = await requestJson<unknown>(appConfig.endpoints.userProfile, {
+      method: 'PUT',
+      token: session.token,
+      body: JSON.stringify(profile),
+    });
+    const savedProfile = normalizeProfile(payload, session.username);
+    await cache.setProfile(session.username, {
+      nickname: savedProfile.nickname,
+      phone: savedProfile.phone,
+      organization: savedProfile.organization,
+      role: savedProfile.role,
+    });
+    return savedProfile;
   },
 
   async recognizeImage(imageUri: string, token?: string, imageBase64?: string): Promise<RecognitionResult> {
@@ -241,42 +175,26 @@ export const api = {
       throw new Error('请先选择图片');
     }
 
-    try {
-      const payload = imageBase64
-        ? await requestJson<unknown>(appConfig.endpoints.recognitionBase64, {
-            method: 'POST',
-            body: createImageBase64Body(imageUri, imageBase64),
-            token,
-            timeoutMs: appConfig.recognitionTimeoutMs,
-          })
-        : await requestJson<unknown>(appConfig.endpoints.recognition, {
-            method: 'POST',
-            body: createImageFormData(imageUri),
-            token,
-            timeoutMs: appConfig.recognitionTimeoutMs,
-          });
+    const payload = imageBase64
+      ? await requestJson<unknown>(appConfig.endpoints.recognitionBase64, {
+          method: 'POST',
+          body: createImageBase64Body(imageUri, imageBase64),
+          token,
+          timeoutMs: appConfig.recognitionTimeoutMs,
+        })
+      : await requestJson<unknown>(appConfig.endpoints.recognition, {
+          method: 'POST',
+          body: createImageFormData(imageUri),
+          token,
+          timeoutMs: appConfig.recognitionTimeoutMs,
+        });
 
-      return normalizeRecognitionResult(payload, imageUri);
-    } catch (error) {
-      if (shouldUseMock(error)) {
-        return createMockRecognitionResult(imageUri);
-      }
-
-      throw error;
-    }
+    return normalizeRecognitionResult(payload, imageUri);
   },
 
   async fetchHistory(token: string): Promise<RecognitionResult[]> {
-    try {
-      const payload = await requestJson<unknown>(appConfig.endpoints.recognitionHistory, { token });
-      return normalizeRecognitionHistory(payload);
-    } catch (error) {
-      if (shouldUseMock(error)) {
-        return [];
-      }
-
-      throw error;
-    }
+    const payload = await requestJson<unknown>(appConfig.endpoints.recognitionHistory, { token });
+    return normalizeRecognitionHistory(payload);
   },
 
   async deleteHistory(ids: string[], token: string): Promise<void> {
@@ -288,20 +206,10 @@ export const api = {
       return;
     }
 
-    try {
-      await requestJson(appConfig.endpoints.recognitionHistory, {
-        method: 'DELETE',
-        token,
-        body: JSON.stringify({ ids: normalizedIds }),
-      });
-    } catch (error) {
-      if (shouldUseMock(error)) {
-        return;
-      }
-
-      throw error;
-    }
+    await requestJson(appConfig.endpoints.recognitionHistory, {
+      method: 'DELETE',
+      token,
+      body: JSON.stringify({ ids: normalizedIds }),
+    });
   },
 };
-
-

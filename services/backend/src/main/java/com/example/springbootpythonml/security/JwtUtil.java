@@ -18,7 +18,7 @@ public class JwtUtil {
     public JwtUtil(
             @Value("${jwt.secret}") String secret,
             @Value("${jwt.expiration}") long expiration) {
-        byte[] keyBytes = Base64.getDecoder().decode(secret);
+        byte[] keyBytes = decodeSecret(secret);
         this.secretKey = Keys.hmacShaKeyFor(keyBytes);
         this.expiration = expiration;
     }
@@ -53,6 +53,24 @@ public class JwtUtil {
         } catch (JwtException | IllegalArgumentException e) {
             return false;
         }
+    }
+
+    private static byte[] decodeSecret(String secret) {
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("JWT_SECRET must be configured");
+        }
+
+        byte[] keyBytes;
+        try {
+            keyBytes = Base64.getDecoder().decode(secret);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("JWT_SECRET must be a Base64 encoded HMAC key", e);
+        }
+
+        if (keyBytes.length < 32) {
+            throw new IllegalStateException("JWT_SECRET must decode to at least 32 bytes");
+        }
+        return keyBytes;
     }
 
     private Claims parseToken(String token) {

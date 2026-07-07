@@ -26,7 +26,7 @@ public class UserProfileService {
         user.setNickname(normalize(request.getNickname()));
         user.setPhone(normalize(request.getPhone()));
         user.setOrganization(normalize(request.getOrganization()));
-        user.setRole(normalize(request.getRole(), "研究人员"));
+        user.setRole(normalize(request.getRole()));
         return UserProfileResponse.from(userRepository.save(user));
     }
 
@@ -43,8 +43,4 @@ public class UserProfileService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    private String normalize(String value, String fallback) {
-        String normalized = normalize(value);
-        return normalized == null ? fallback : normalized;
-    }
 }

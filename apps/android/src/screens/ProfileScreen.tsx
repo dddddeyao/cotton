@@ -13,14 +13,13 @@ import {
 
 import { PrimaryButton } from '../components/common';
 import { api } from '../services/api';
-import { colors, spacing } from '../theme';
+import { colors, shadow, spacing } from '../theme';
 import { UserSession } from '../types';
 
 export function ProfileScreen({
   session,
   onSessionChange,
   onOpenEditProfile,
-  onOpenCollection,
   onOpenSettings,
   onOpenAgreement,
   onLogout,
@@ -29,7 +28,6 @@ export function ProfileScreen({
   session: UserSession | null;
   onSessionChange: (session: UserSession) => void;
   onOpenEditProfile: () => void;
-  onOpenCollection: () => void;
   onOpenSettings: () => void;
   onOpenAgreement: (kind: 'user' | 'privacy') => void;
   onLogout: () => void | Promise<void>;
@@ -81,13 +79,26 @@ export function ProfileScreen({
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
+        <View style={styles.systemHeader}>
+          <View>
+            <Text style={styles.systemTitle}>系统账号管理</Text>
+            <Text style={styles.systemText}>用于检测记录同步、资料维护与系统设置</Text>
+          </View>
+          <View style={[styles.loginState, session && styles.loginStateActive]}>
+            <Text style={[styles.loginStateText, session && styles.loginStateTextActive]}>{session ? 'ONLINE' : 'OFFLINE'}</Text>
+          </View>
+        </View>
+
         {session ? (
-          <View style={styles.sessionBanner}>
-            <View style={styles.sessionIcon}>
-              <Ionicons name="checkmark-circle" size={28} color={colors.primary} />
+          <View style={styles.sessionPanel}>
+            <View style={styles.sessionRow}>
+              <Text style={styles.sessionLabel}>当前账号</Text>
+              <Text style={styles.sessionValue}>{session.username}</Text>
             </View>
-            <Text style={styles.sessionTitle}>已登录：{session.username}</Text>
-            <Text style={styles.sessionText}>识别历史、资料编辑等账号功能会优先使用当前 token。</Text>
+            <View style={styles.sessionRow}>
+              <Text style={styles.sessionLabel}>账号状态</Text>
+              <Text style={styles.sessionValue}>已认证</Text>
+            </View>
             <Pressable
               style={[styles.logoutInlineButton, isLoggingOut && styles.logoutInlineButtonDisabled]}
               onPress={onLogout}
@@ -99,13 +110,13 @@ export function ProfileScreen({
             </Pressable>
           </View>
         ) : (
-          <>
+          <View style={styles.authPanel}>
             <View style={styles.authSwitch}>
               <Pressable style={[styles.authSwitchItem, mode === 'login' && styles.authSwitchItemActive]} onPress={() => switchMode('login')}>
                 <Text style={[styles.authSwitchText, mode === 'login' && styles.authSwitchTextActive]}>登录</Text>
               </Pressable>
-              <Pressable style={[styles.authSwitchItem, mode === 'register' && styles.authSwitchItemActiveMuted]} onPress={() => switchMode('register')}>
-                <Text style={styles.authSwitchText}>注册</Text>
+              <Pressable style={[styles.authSwitchItem, mode === 'register' && styles.authSwitchItemActive]} onPress={() => switchMode('register')}>
+                <Text style={[styles.authSwitchText, mode === 'register' && styles.authSwitchTextActive]}>注册</Text>
               </Pressable>
             </View>
 
@@ -135,15 +146,28 @@ export function ProfileScreen({
                 />
               ) : null}
               {message ? <Text style={styles.formMessage}>{message}</Text> : null}
-              <PrimaryButton title={submitting ? '处理中...' : mode === 'login' ? '登录' : '注册'} onPress={submit} disabled={submitting} />
+              <PrimaryButton title={submitting ? '处理中...' : mode === 'login' ? '登录系统' : '注册账号'} onPress={submit} disabled={submitting} />
             </View>
-          </>
+          </View>
         )}
 
+        <View style={styles.moduleHeader}>
+          <Text style={styles.moduleHeaderText}>功能模块</Text>
+          <Text style={styles.moduleHeaderMeta}>ACCOUNT</Text>
+        </View>
         <View style={styles.profileCards}>
-          <ProfileAction icon="document-text" title="编辑资料" subtitle="Person Information" onPress={onOpenEditProfile} />
-          <ProfileAction icon="bookmark" title="我的收藏" subtitle="Collection" onPress={onOpenCollection} />
-          <ProfileAction icon="settings" title="应用设置" subtitle="Settings" onPress={onOpenSettings} />
+          <ProfileAction icon="document-text-outline" title="资料维护" subtitle="Person Information" onPress={onOpenEditProfile} />
+          <ProfileAction icon="settings-outline" title="系统设置" subtitle="Settings" onPress={onOpenSettings} />
+        </View>
+
+        <View style={styles.appIntro}>
+          <View style={styles.appIntroHeader}>
+            <Ionicons name="leaf-outline" size={18} color={colors.primaryDark} />
+            <Text style={styles.appIntroTitle}>App 功能简介</Text>
+          </View>
+          <Text style={styles.appIntroText}>
+            棉花识别助手整合图像识别、检测记录、行业资讯与账号资料维护，帮助快速完成样本分析、结果回看和信息管理。
+          </Text>
         </View>
 
         <View style={styles.profileLinks}>
@@ -193,7 +217,7 @@ function PasswordField({
         accessibilityLabel={secure ? '显示密码' : '隐藏密码'}
         hitSlop={8}
       >
-        <Ionicons name={secure ? 'eye-outline' : 'eye-off-outline'} size={22} color={colors.primary} />
+        <Ionicons name={secure ? 'eye-outline' : 'eye-off-outline'} size={20} color={colors.primaryDark} />
       </Pressable>
     </View>
   );
@@ -212,9 +236,15 @@ function ProfileAction({
 }) {
   return (
     <Pressable style={styles.profileAction} onPress={onPress} accessibilityRole="button">
-      <Ionicons name={icon} size={38} color="#20202a" />
-      <Text style={styles.profileActionTitle}>{title}</Text>
-      <Text style={styles.profileActionSubtitle}>{subtitle}</Text>
+      <Ionicons name={icon} size={22} color={colors.primaryDark} />
+      <View style={styles.profileActionText}>
+        <Text style={styles.profileActionTitle} numberOfLines={1}>
+          {title}
+        </Text>
+        <Text style={styles.profileActionSubtitle} numberOfLines={1}>
+          {subtitle}
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -226,56 +256,105 @@ const styles = StyleSheet.create({
   },
   page: {
     padding: spacing.page,
-    paddingTop: 70,
     paddingBottom: 96,
   },
-  authSwitch: {
-    alignSelf: 'center',
+  systemHeader: {
+    minHeight: 78,
+    borderRadius: spacing.radius,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+    padding: 14,
     flexDirection: 'row',
-    backgroundColor: '#edf5ff',
-    borderRadius: 28,
-    overflow: 'hidden',
-    marginBottom: 28,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...shadow,
   },
-  authSwitchItem: {
-    minWidth: 126,
-    minHeight: 56,
+  systemTitle: {
+    color: colors.ink,
+    fontSize: 19,
+    fontWeight: '900',
+  },
+  systemText: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  loginState: {
+    minWidth: 76,
+    minHeight: 34,
+    borderRadius: spacing.radius,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: '#f4fafc',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 28,
+  },
+  loginStateActive: {
+    backgroundColor: '#e2f7fb',
+    borderColor: '#9ddce7',
+  },
+  loginStateText: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  loginStateTextActive: {
+    color: colors.success,
+  },
+  authPanel: {
+    borderRadius: spacing.radius,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+    padding: 14,
+    marginTop: 14,
+  },
+  authSwitch: {
+    flexDirection: 'row',
+    borderRadius: spacing.radius,
+    borderWidth: 1,
+    borderColor: colors.line,
+    overflow: 'hidden',
+    marginBottom: 14,
+  },
+  authSwitchItem: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
   },
   authSwitchItemActive: {
     backgroundColor: colors.primaryDark,
   },
-  authSwitchItemActiveMuted: {
-    backgroundColor: '#cfe5ff',
-  },
   authSwitchText: {
-    color: '#2e3342',
-    fontSize: 20,
-    fontWeight: '800',
+    color: colors.ink,
+    fontSize: 15,
+    fontWeight: '900',
   },
   authSwitchTextActive: {
     color: '#ffffff',
   },
   authForm: {
-    gap: 12,
-    marginBottom: 22,
+    gap: 10,
   },
   formInput: {
-    minHeight: 52,
+    minHeight: 48,
     borderRadius: spacing.radius,
-    backgroundColor: colors.surfaceStrong,
+    backgroundColor: '#f8fdff',
     borderWidth: 1,
     borderColor: colors.line,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     color: colors.ink,
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: '700',
   },
   passwordRow: {
-    minHeight: 52,
+    minHeight: 48,
     borderRadius: spacing.radius,
-    backgroundColor: colors.surfaceStrong,
+    backgroundColor: '#f8fdff',
     borderWidth: 1,
     borderColor: colors.line,
     flexDirection: 'row',
@@ -283,60 +362,60 @@ const styles = StyleSheet.create({
   },
   passwordInput: {
     flex: 1,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     color: colors.ink,
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: '700',
   },
   passwordToggle: {
-    width: 52,
+    width: 48,
     alignSelf: 'stretch',
     alignItems: 'center',
     justifyContent: 'center',
+    borderLeftWidth: 1,
+    borderLeftColor: colors.line,
   },
   passwordTogglePressed: {
     opacity: 0.56,
   },
   formMessage: {
     color: colors.primaryDark,
-    fontSize: 14,
+    fontSize: 13,
     textAlign: 'center',
+    fontWeight: '800',
   },
-  sessionBanner: {
+  sessionPanel: {
     borderRadius: spacing.radius,
-    backgroundColor: '#edf6ff',
-    padding: 18,
-    marginBottom: 22,
+    backgroundColor: colors.surface,
+    padding: 14,
+    marginTop: 14,
     borderWidth: 1,
-    borderColor: '#d5e7ff',
-    alignItems: 'center',
+    borderColor: colors.line,
   },
-  sessionIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: '#ffffff',
+  sessionRow: {
+    minHeight: 42,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: '#d7e8ee',
   },
-  sessionTitle: {
-    color: colors.primaryDark,
-    fontSize: 18,
+  sessionLabel: {
+    color: colors.muted,
+    fontSize: 12,
     fontWeight: '900',
   },
-  sessionText: {
-    color: '#52617d',
+  sessionValue: {
+    color: colors.ink,
     fontSize: 14,
-    lineHeight: 20,
-    marginTop: 5,
-    textAlign: 'center',
+    fontWeight: '900',
   },
   logoutInlineButton: {
-    minHeight: 40,
-    borderRadius: 20,
+    minHeight: 42,
+    borderRadius: spacing.radius,
     borderWidth: 1,
-    borderColor: '#f2c6bd',
-    backgroundColor: '#fff6f3',
+    borderColor: '#d6b3ae',
+    backgroundColor: '#f8fdff',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -350,36 +429,83 @@ const styles = StyleSheet.create({
   logoutInlineText: {
     color: colors.danger,
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '900',
+  },
+  moduleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  moduleHeaderText: {
+    color: colors.ink,
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  moduleHeaderMeta: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '900',
   },
   profileCards: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 24,
+    gap: 8,
   },
   profileAction: {
     flex: 1,
-    minHeight: 136,
+    minHeight: 76,
     borderRadius: spacing.radius,
-    backgroundColor: 'rgba(255, 251, 255, 0.74)',
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.line,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 8,
+    justifyContent: 'flex-start',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  profileActionText: {
+    flex: 1,
+    minWidth: 0,
   },
   profileActionTitle: {
     color: colors.ink,
-    fontSize: 16,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginTop: 8,
+    fontSize: 14,
+    fontWeight: '900',
   },
   profileActionSubtitle: {
     color: colors.muted,
+    fontSize: 10,
+    marginTop: 3,
+    fontWeight: '700',
+  },
+  appIntro: {
+    borderRadius: spacing.radius,
+    borderWidth: 1,
+    borderColor: '#cfe5ed',
+    backgroundColor: '#f8fdff',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 12,
+  },
+  appIntroHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  appIntroTitle: {
+    color: colors.ink,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  appIntroText: {
+    color: colors.muted,
     fontSize: 12,
-    textAlign: 'center',
-    marginTop: 4,
+    lineHeight: 19,
+    fontWeight: '700',
   },
   profileLinks: {
     alignItems: 'center',
@@ -387,12 +513,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginTop: 32,
+    marginTop: 18,
   },
   profileLinkText: {
     color: colors.primaryDark,
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '900',
   },
   profileDivider: {
     color: colors.primaryDark,
@@ -400,7 +526,8 @@ const styles = StyleSheet.create({
   customerService: {
     width: '100%',
     textAlign: 'center',
-    color: colors.primaryDark,
-    fontSize: 14,
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

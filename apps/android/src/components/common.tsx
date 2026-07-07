@@ -1,4 +1,4 @@
-﻿import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -25,20 +25,21 @@ export function StackPage({
           onPress={handleBack}
           accessibilityRole="button"
           accessibilityLabel="返回"
-          android_ripple={{ color: '#d7e3ec', borderless: true }}
-          hitSlop={{ top: 16, right: 16, bottom: 16, left: 16 }}
+          android_ripple={{ color: '#e7f4f8', borderless: false }}
+          hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
         >
-          <Ionicons name="chevron-back" size={30} color={colors.ink} />
+          <Ionicons name="chevron-back" size={24} color={colors.ink} />
         </Pressable>
-        <Text style={styles.stackTitle}>{title}</Text>
-        <View style={styles.headerSpacer} />
+        <View style={styles.stackTitleBlock}>
+          <Text style={styles.stackTitle}>{title}</Text>
+        </View>
       </View>
       {children}
     </View>
   );
 }
 
-export function EmptyState({ title, text = '后续接入真实数据后这里会自动刷新。' }: { title: string; text?: string }) {
+export function EmptyState({ title, text = '暂无可显示数据。' }: { title: string; text?: string }) {
   return (
     <View style={styles.emptyPanel}>
       <Text style={styles.emptyTitle}>{title}</Text>
@@ -86,10 +87,10 @@ export function DataTable({ headers, rows }: { headers: string[]; rows: string[]
           </Text>
         ))}
       </View>
-      {rows.map((row) => (
-        <View key={row.join('-')} style={styles.tableRow}>
+      {rows.map((row, rowIndex) => (
+        <View key={row.join('-')} style={[styles.tableRow, rowIndex % 2 === 1 && styles.tableRowAlt]}>
           {row.map((cell, index) => (
-            <Text key={`${cell}-${index}`} style={styles.tableCell}>
+            <Text key={`${cell}-${index}`} style={[styles.tableCell, index > 0 && styles.tableCellDivider]}>
               {cell}
             </Text>
           ))}
@@ -107,7 +108,7 @@ export function SettingsRow({
   onPress,
 }: {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   danger?: boolean;
   disabled?: boolean;
   onPress: () => void;
@@ -119,11 +120,12 @@ export function SettingsRow({
       disabled={disabled}
       accessibilityRole="button"
     >
+      <View style={styles.settingsMarker} />
       <View style={styles.settingsTextBlock}>
         <Text style={[styles.settingsTitle, danger && styles.dangerText]}>{title}</Text>
-        <Text style={styles.settingsSubtitle}>{subtitle}</Text>
+        {subtitle ? <Text style={styles.settingsSubtitle}>{subtitle}</Text> : null}
       </View>
-      <Ionicons name="chevron-forward" size={22} color={colors.muted} />
+      <Ionicons name="chevron-forward" size={20} color={colors.muted} />
     </Pressable>
   );
 }
@@ -134,34 +136,37 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   stackHeader: {
-    minHeight: 58,
+    minHeight: 62,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    paddingHorizontal: 12,
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
   },
   backButton: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
+    borderRadius: spacing.radius,
+    borderWidth: 1,
+    borderColor: colors.line,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
-    elevation: 4,
+    backgroundColor: '#ffffff',
   },
   backButtonPressed: {
-    opacity: 0.58,
+    opacity: 0.62,
+  },
+  stackTitleBlock: {
+    flex: 1,
+    marginLeft: 12,
   },
   stackTitle: {
     color: colors.ink,
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '900',
   },
-  headerSpacer: {
-    width: 44,
-  },
+
   emptyPanel: {
     borderRadius: spacing.radius,
     backgroundColor: colors.surfaceStrong,
@@ -170,103 +175,121 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.line,
-    marginTop: 24,
+    marginTop: 18,
   },
   emptyTitle: {
     color: colors.ink,
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '900',
     textAlign: 'center',
   },
   emptyText: {
     color: colors.muted,
-    fontSize: 14,
+    fontSize: 13,
     textAlign: 'center',
     marginTop: 8,
-    lineHeight: 20,
+    lineHeight: 19,
   },
   primaryButton: {
-    minHeight: 50,
+    minHeight: 48,
     borderRadius: spacing.radius,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
+    borderWidth: 1,
+    borderColor: colors.primaryDark,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
   primaryButtonDisabled: {
-    backgroundColor: '#a9bdca',
+    backgroundColor: '#9aa7b3',
+    borderColor: '#9aa7b3',
   },
   primaryButtonText: {
     color: '#ffffff',
-    fontSize: 17,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '900',
   },
   secondaryButton: {
-    minHeight: 50,
+    minHeight: 48,
     borderRadius: spacing.radius,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.primaryDark,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 20,
+    marginTop: 18,
+    backgroundColor: '#ffffff',
   },
   secondaryButtonText: {
-    color: colors.primary,
-    fontSize: 16,
-    fontWeight: '800',
+    color: colors.primaryDark,
+    fontSize: 15,
+    fontWeight: '900',
   },
   table: {
     borderRadius: spacing.radius,
     borderWidth: 1,
     borderColor: colors.line,
     overflow: 'hidden',
-    marginBottom: 24,
+    marginBottom: 14,
     backgroundColor: colors.surfaceStrong,
     ...shadow,
   },
   tableRowHeader: {
     flexDirection: 'row',
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDark,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
   },
   tableHeaderCell: {
     flex: 1,
     color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '800',
-    paddingHorizontal: 8,
-    paddingVertical: 12,
+    fontSize: 11,
+    fontWeight: '900',
+    paddingHorizontal: 5,
+    paddingVertical: 8,
     textAlign: 'center',
   },
   tableRow: {
     flexDirection: 'row',
     borderTopWidth: 1,
-    borderTopColor: colors.line,
-    backgroundColor: '#fff',
+    borderTopColor: '#d7e8ee',
+    backgroundColor: '#ffffff',
+  },
+  tableRowAlt: {
+    backgroundColor: '#f8fdff',
   },
   tableCell: {
     flex: 1,
-    color: '#344756',
-    fontSize: 13,
-    lineHeight: 18,
-    paddingHorizontal: 8,
-    paddingVertical: 14,
+    color: '#253240',
+    fontSize: 10.5,
+    lineHeight: 15,
+    paddingHorizontal: 5,
+    paddingVertical: 6,
     textAlign: 'center',
   },
+  tableCellDivider: {
+    borderLeftWidth: 1,
+    borderLeftColor: '#e3eef2',
+  },
   settingsRow: {
-    minHeight: 76,
+    minHeight: 68,
     borderRadius: spacing.radius,
     backgroundColor: colors.surfaceStrong,
     borderWidth: 1,
     borderColor: colors.line,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
   settingsRowDisabled: {
     opacity: 0.56,
+  },
+  settingsMarker: {
+    width: 3,
+    alignSelf: 'stretch',
+    backgroundColor: colors.primary,
+    marginRight: 12,
   },
   settingsTextBlock: {
     flex: 1,
@@ -274,17 +297,16 @@ const styles = StyleSheet.create({
   },
   settingsTitle: {
     color: colors.ink,
-    fontSize: 17,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '900',
   },
   settingsSubtitle: {
     color: colors.muted,
-    fontSize: 13,
+    fontSize: 12,
     marginTop: 4,
   },
   dangerText: {
     color: colors.danger,
   },
 });
-
 

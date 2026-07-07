@@ -26,16 +26,27 @@ services:
     build:
       context: ./services/backend/model-service-python
     restart: unless-stopped
+    environment:
+      COLOR_MODEL_PATH: /app/fourtime-best.pth
+      COLOR_GRADE_LABELS: ${COLOR_GRADE_LABELS:-11,21,31,41,51,61,71}
+      COTTON_UNET_WEIGHTS: /app/fenge_best.pth
+      IMPURITY_UNET_WEIGHTS: /app/impurityarea_best.pth
     volumes:
       - type: bind
-        source: ./services/backend/model-service-python/cotton-best.pth
-        target: /app/cotton-best.pth
+        source: ./services/backend/model-service-python/fourtime-best.pth
+        target: /app/fourtime-best.pth
         read_only: true
         bind:
           create_host_path: false
       - type: bind
         source: ./services/backend/model-service-python/fenge_best.pth
         target: /app/fenge_best.pth
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./services/backend/model-service-python/impurityarea_best.pth
+        target: /app/impurityarea_best.pth
         read_only: true
         bind:
           create_host_path: false
@@ -63,12 +74,23 @@ services:
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-cotton_user}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-change-me}
       SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO:-update}
-      JWT_SECRET: ${JWT_SECRET:-Y29udG9uLXJlY29nbml0aW9uLWFzc2lzdGFudC1zZWNyZXQta2V5LWZvci1wcm9kdWN0aW9uLTIwMjY=}
+      JWT_SECRET: "${JWT_SECRET:?Set JWT_SECRET to a Base64 encoded HMAC key}"
       JWT_EXPIRATION: ${JWT_EXPIRATION:-604800000}
       PYTHON_SERVICE_URL: http://model-service:5000
       PYTHON_SERVICE_CONNECT_TIMEOUT_MS: ${PYTHON_SERVICE_CONNECT_TIMEOUT_MS:-5000}
       PYTHON_SERVICE_READ_TIMEOUT_MS: ${PYTHON_SERVICE_READ_TIMEOUT_MS:-180000}
       APP_UPLOAD_DIR: /app/uploads
+      APP_NEWS_CRAWLER_ENABLED: ${APP_NEWS_CRAWLER_ENABLED:-true}
+      APP_NEWS_CRAWLER_INITIAL_DELAY_MS: ${APP_NEWS_CRAWLER_INITIAL_DELAY_MS:-5000}
+      APP_NEWS_CRAWLER_FIXED_DELAY_MS: ${APP_NEWS_CRAWLER_FIXED_DELAY_MS:-86400000}
+      APP_NEWS_CRAWLER_MAX_ITEMS_PER_SOURCE: ${APP_NEWS_CRAWLER_MAX_ITEMS_PER_SOURCE:-5}
+      APP_NEWS_CRAWLER_MAX_ITEMS_PER_REFRESH: ${APP_NEWS_CRAWLER_MAX_ITEMS_PER_REFRESH:-5}
+      APP_NEWS_CRAWLER_MAX_ITEMS_PER_DAY: ${APP_NEWS_CRAWLER_MAX_ITEMS_PER_DAY:-5}
+      APP_NEWS_CRAWLER_MAX_STORED_ITEMS: ${APP_NEWS_CRAWLER_MAX_STORED_ITEMS:-100}
+      APP_NEWS_CRAWLER_MIN_STORED_ITEMS: ${APP_NEWS_CRAWLER_MIN_STORED_ITEMS:-50}
+      APP_NEWS_CRAWLER_MIN_CHINESE_RATIO: ${APP_NEWS_CRAWLER_MIN_CHINESE_RATIO:-0.75}
+      APP_NEWS_CRAWLER_REQUEST_TIMEOUT_MS: ${APP_NEWS_CRAWLER_REQUEST_TIMEOUT_MS:-20000}
+      APP_NEWS_CRAWLER_REQUIRE_IMAGE: ${APP_NEWS_CRAWLER_REQUIRE_IMAGE:-false}
       APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-*}
       APP_CORS_ALLOW_CREDENTIALS: ${APP_CORS_ALLOW_CREDENTIALS:-false}
     volumes:

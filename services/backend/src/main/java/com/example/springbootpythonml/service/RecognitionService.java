@@ -13,6 +13,7 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -60,13 +61,24 @@ public class RecognitionService {
         HttpEntity<MultiValueMap<String, Object>> req = new HttpEntity<>(body, headers);
         String url = flaskBaseUrl + "/predict?images=" + (includeImages ? "1" : "0");
 
-        ResponseEntity<String> resp = restTemplate.postForEntity(url, req, String.class);
-        String json = resp.getBody();
+        String json;
+        try {
+            ResponseEntity<String> resp = restTemplate.postForEntity(url, req, String.class);
+            json = resp.getBody();
+        } catch (HttpStatusCodeException e) {
+            json = e.getResponseBodyAsString();
+            if (json == null || json.isBlank()) {
+                throw e;
+            }
+        }
         if (json == null || json.isBlank()) {
             throw new IllegalStateException("模型服务返回为空");
         }
 
         RecognitionResult result = objectMapper.readValue(json, RecognitionResult.class);
+        if (result.getErrorMessage() != null) {
+            return result;
+        }
         String storedImageUri = saveUpload(file);
         result.setImageUri(storedImageUri);
 
@@ -83,13 +95,20 @@ public class RecognitionService {
             RecognitionRecord record = new RecognitionRecord();
             record.setUserId(userId);
             record.setImageUri(storedImageUri);
+            record.setCottonAreaImage(result.getCottonAreaImage());
+            record.setImpurityAreaImage(result.getImpurityAreaImage());
+            record.setCottonMaskImage(result.getCottonMaskImage());
+            record.setImpurityMaskImage(result.getImpurityMaskImage());
+            record.setCottonOverlayImage(result.getCottonOverlayImage());
+            record.setImpurityOverlayImage(result.getImpurityOverlayImage());
+            record.setBlackBackgroundImpurityOverlay(result.getBlackBackgroundImpurityOverlay());
             record.setColorGrade(result.getDetectionResult().getColorGrade());
             record.setImpurityGrade(result.getDetectionResult().getImpurityGrade());
             record.setCottonArea(result.getDetectionResult().getCottonArea());
             record.setImpurityArea(result.getDetectionResult().getImpurityArea());
             record.setAreaRatio(result.getDetectionResult().getAreaRatio());
             record.setConfidence(result.getDetectionResult().getConfidence());
-            record.setConclusion("等级 " + result.getDetectionResult().getColorGrade());
+            record.setConclusion(result.getConclusion());
             record = recordRepository.save(record);
 
             result.setId(record.getId());

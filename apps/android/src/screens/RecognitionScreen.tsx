@@ -1,10 +1,25 @@
-﻿import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { PrimaryButton } from '../components/common';
-import { CottonFieldVisual } from '../components/visuals';
 import { colors, shadow, spacing } from '../theme';
+
+const emptyPreviewImage = require('../../assets/recognition-empty-bg.png');
+
+const recognitionPalette = {
+  background: colors.background,
+  surface: colors.surface,
+  surfaceSoft: colors.surfaceStrong,
+  primary: colors.primaryDark,
+  primaryText: colors.ink,
+  muted: colors.muted,
+  line: colors.line,
+  cyan: colors.primarySoft,
+  cyanSoft: colors.accentSoft,
+  cyanLine: '#a8dce5',
+  instrumentInk: '#111827',
+};
 
 export function RecognitionScreen({
   imageUri,
@@ -19,289 +34,385 @@ export function RecognitionScreen({
   onRecognize: () => void;
   onOpenHistory: () => void | Promise<void>;
 }) {
+  const acquisitionState = isRecognizing ? '检测中' : imageUri ? '已载入' : '待上传';
+  const inputState = imageUri ? '本地图像' : '无输入';
+  const pipelineState = isRecognizing ? '处理中' : imageUri ? '待开始' : '未开始';
+  const { height } = useWindowDimensions();
+  const previewViewportHeight = Math.max(184, Math.min(282, Math.round(height * 0.31)));
   return (
-    <View style={styles.root}>
-      <View style={styles.previewPanel}>
-        <View style={styles.previewHeader}>
-          <View>
-            <Text style={styles.panelKicker}>IMAGE ACQUISITION</Text>
-            <Text style={styles.panelTitle}>棉花样本采集台</Text>
+    <ScrollView style={styles.root} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <View style={styles.headerPanel}>
+        <View>
+          <View style={styles.headerTitleRow}>
+            <View style={[styles.signalDot, imageUri && styles.signalDotReady, isRecognizing && styles.signalDotActive]} />
+            <Text style={styles.headerTitle}>棉花样本分析</Text>
           </View>
-          <View style={[styles.statusBadge, imageUri && styles.statusBadgeReady]}>
-            <Text style={[styles.statusText, imageUri && styles.statusTextReady]}>{imageUri ? '样本已载入' : '等待采集'}</Text>
-          </View>
+          <Text style={styles.headerText}>棉花样本视觉采集与识别提交</Text>
         </View>
-
-        <View style={styles.previewViewport}>
-          {imageUri ? <Image source={{ uri: imageUri }} style={styles.previewImage} /> : <CottonFieldVisual />}
-          <View pointerEvents="none" style={styles.frameTopLeft} />
-          <View pointerEvents="none" style={styles.frameTopRight} />
-          <View pointerEvents="none" style={styles.frameBottomLeft} />
-          <View pointerEvents="none" style={styles.frameBottomRight} />
-        </View>
-
-        <View style={styles.previewFooter}>
-          <Text style={styles.previewMeta}>采集对象：棉花图像样本</Text>
-          <Text style={styles.previewMeta}>{imageUri ? '图像可进入识别流程' : '建议在均匀光照下完成拍摄'}</Text>
+        <View style={[styles.statusCell, imageUri && styles.statusCellReady]}>
+          <Text style={styles.statusLabel}>任务状态</Text>
+          <Text style={[styles.statusText, imageUri && styles.statusTextReady]}>{acquisitionState}</Text>
         </View>
       </View>
 
-      <View style={styles.controls}>
-        <Pressable style={styles.toolCard} onPress={() => onPickImage('library')} accessibilityRole="button">
-          <View style={styles.toolIconBox}>
-            <Ionicons name="image-outline" size={26} color={colors.primaryDark} />
+      <View style={styles.previewPanel}>
+        <View style={styles.panelHeader}>
+          <View>
+            <Text style={styles.panelTitle}>样本预览舱</Text>
+            <Text style={styles.panelSubTitle}>VISUAL ACQUISITION</Text>
           </View>
-          <Text style={styles.toolLabel}>相册模式</Text>
-          <Text style={styles.toolText}>导入既有样本</Text>
-        </Pressable>
+          <View style={styles.panelMetaGroup}>
+            <View style={[styles.metaDot, imageUri && styles.metaDotReady, isRecognizing && styles.metaDotActive]} />
+            <Text style={styles.panelMeta}>{imageUri ? '已载入' : '未载入'}</Text>
+          </View>
+        </View>
+        <View style={[styles.previewViewport, { height: previewViewportHeight }]}>
+          {imageUri ? (
+            <Image source={{ uri: imageUri }} style={styles.previewImage} />
+          ) : (
+            <ImageBackground
+              source={emptyPreviewImage}
+              style={styles.emptyPreview}
+              imageStyle={styles.emptyPreviewImage}
+              resizeMode="cover"
+            >
+              <View style={styles.emptyPreviewScrim}>
+                <Text style={styles.emptyPreviewText}>请上传照片</Text>
+              </View>
+            </ImageBackground>
+          )}
+        </View>
+        <View style={styles.previewInfoRow}>
+          <InfoCell label="对象" value="棉花样本" />
+          <InfoCell label="输入" value={inputState} />
+          <InfoCell label="流程" value={pipelineState} />
+        </View>
+      </View>
 
-        <Pressable style={styles.captureButton} onPress={() => onPickImage('camera')} accessibilityRole="button">
-          <View style={styles.captureIconBox}>
-            <Ionicons name="camera" size={34} color="#ffffff" />
-          </View>
-          <Text style={styles.captureLabel}>相机模式</Text>
-          <Text style={styles.captureText}>现场拍摄采集</Text>
-        </Pressable>
-
-        <Pressable style={styles.toolCard} onPress={onOpenHistory} accessibilityRole="button">
-          <View style={styles.toolIconBox}>
-            <Ionicons name="clipboard-outline" size={26} color={colors.primaryDark} />
-          </View>
-          <Text style={styles.toolLabel}>识别记录</Text>
-          <Text style={styles.toolText}>查看历史参数</Text>
-        </Pressable>
+      <View style={styles.controlPanel}>
+        <View style={styles.controlHeader}>
+          <Text style={styles.controlTitle}>任务操作</Text>
+          <Text style={styles.controlMeta}>INPUT / RUN / ARCHIVE</Text>
+        </View>
+        <View style={styles.controls}>
+          <ActionButton icon="image-outline" title="导入图片" subtitle="相册模式" onPress={() => onPickImage('library')} />
+          <ActionButton icon="camera-outline" title="拍摄样本" subtitle="相机模式" primary onPress={() => onPickImage('camera')} />
+          <ActionButton icon="reader-outline" title="检测记录" subtitle="参数记录" onPress={onOpenHistory} />
+        </View>
       </View>
 
       <View style={styles.footer}>
-        <Text style={styles.hint}>{imageUri ? '图片已选择，可开始识别。' : '拍摄或选择一张棉花图片后开始识别。'}</Text>
+        <Text style={styles.hint}>{imageUri ? '样本图像已准备，可提交检测。' : '请导入或拍摄棉花样本图像。'}</Text>
         <PrimaryButton
-          title={isRecognizing ? '识别中...' : '开始识别'}
+          title={isRecognizing ? '检测中...' : '开始检测'}
           onPress={onRecognize}
           disabled={!imageUri || isRecognizing}
         />
       </View>
+    </ScrollView>
+  );
+}
+
+function InfoCell({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.infoCell}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue}>{value}</Text>
     </View>
+  );
+}
+
+function ActionButton({
+  icon,
+  title,
+  subtitle,
+  primary = false,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  subtitle: string;
+  primary?: boolean;
+  onPress: () => void | Promise<void>;
+}) {
+  return (
+    <Pressable style={[styles.actionButton, primary && styles.actionButtonPrimary]} onPress={onPress} accessibilityRole="button">
+      <Ionicons name={icon} size={24} color={primary ? '#ffffff' : recognitionPalette.primary} />
+      <Text style={[styles.actionTitle, primary && styles.actionTitlePrimary]}>{title}</Text>
+      <Text style={[styles.actionSubtitle, primary && styles.actionSubtitlePrimary]}>{subtitle}</Text>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: recognitionPalette.background,
   },
-  previewPanel: {
-    flex: 1,
-    margin: spacing.page,
-    marginBottom: 12,
+  content: {
+    flexGrow: 1,
+    padding: spacing.page,
+    paddingBottom: 0,
+  },
+  headerPanel: {
+    minHeight: 78,
     borderRadius: spacing.radius,
-    overflow: 'hidden',
-    backgroundColor: '#0f2233',
     borderWidth: 1,
-    borderColor: '#29475d',
-    ...shadow,
-  },
-  previewHeader: {
-    minHeight: 76,
+    borderColor: recognitionPalette.line,
+    backgroundColor: recognitionPalette.surface,
+    padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    backgroundColor: '#102b40',
-    borderBottomWidth: 1,
-    borderBottomColor: '#28495f',
+    ...shadow,
   },
-  panelKicker: {
-    color: '#9ab4c8',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0,
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  panelTitle: {
-    color: '#f5f9fc',
+  signalDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: '#9aa8b3',
+  },
+  signalDotReady: {
+    backgroundColor: recognitionPalette.primary,
+  },
+  signalDotActive: {
+    backgroundColor: '#111827',
+  },
+  headerTitle: {
+    color: recognitionPalette.primaryText,
     fontSize: 19,
     fontWeight: '900',
+  },
+  headerText: {
+    color: recognitionPalette.muted,
+    fontSize: 12,
+    fontWeight: '700',
     marginTop: 4,
   },
-  statusBadge: {
+  statusCell: {
     minWidth: 82,
-    minHeight: 32,
-    borderRadius: 16,
+    minHeight: 42,
+    borderRadius: spacing.radius,
+    borderWidth: 1,
+    borderColor: recognitionPalette.line,
+    backgroundColor: recognitionPalette.cyanSoft,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#263d4e',
-    borderWidth: 1,
-    borderColor: '#3c5a70',
+    paddingHorizontal: 8,
   },
-  statusBadgeReady: {
-    backgroundColor: '#dff4ea',
-    borderColor: '#96cdb3',
+  statusCellReady: {
+    backgroundColor: recognitionPalette.cyan,
+    borderColor: recognitionPalette.cyanLine,
+  },
+  statusLabel: {
+    color: recognitionPalette.muted,
+    fontSize: 9,
+    fontWeight: '900',
+    marginBottom: 2,
   },
   statusText: {
-    color: '#cfdae3',
+    color: recognitionPalette.muted,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  statusTextReady: {
+    color: recognitionPalette.primary,
+  },
+  previewPanel: {
+    marginTop: 14,
+    borderRadius: spacing.radius,
+    borderWidth: 1,
+    borderColor: recognitionPalette.line,
+    backgroundColor: recognitionPalette.surface,
+    overflow: 'hidden',
+    ...shadow,
+  },
+  panelHeader: {
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    backgroundColor: recognitionPalette.surfaceSoft,
+    borderBottomWidth: 1,
+    borderBottomColor: recognitionPalette.line,
+  },
+  panelTitle: {
+    color: recognitionPalette.primaryText,
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  panelSubTitle: {
+    color: recognitionPalette.muted,
+    fontSize: 9,
+    fontWeight: '900',
+    marginTop: 3,
+  },
+  panelMetaGroup: {
+    minHeight: 30,
+    borderRadius: spacing.radius,
+    borderWidth: 1,
+    borderColor: recognitionPalette.line,
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+  },
+  metaDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#9aa8b3',
+  },
+  metaDotReady: {
+    backgroundColor: recognitionPalette.primary,
+  },
+  metaDotActive: {
+    backgroundColor: recognitionPalette.instrumentInk,
+  },
+  panelMeta: {
+    color: recognitionPalette.muted,
     fontSize: 12,
     fontWeight: '800',
   },
-  statusTextReady: {
-    color: colors.success,
-  },
   previewViewport: {
-    flex: 1,
-    minHeight: 260,
+    minHeight: 184,
+    backgroundColor: '#dfeef3',
     overflow: 'hidden',
-    backgroundColor: '#c9dce9',
   },
   previewImage: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
   },
-  frameTopLeft: {
-    position: 'absolute',
-    left: 18,
-    top: 18,
-    width: 34,
-    height: 34,
-    borderLeftWidth: 2,
-    borderTopWidth: 2,
-    borderColor: '#ffffff',
-    opacity: 0.82,
-  },
-  frameTopRight: {
-    position: 'absolute',
-    right: 18,
-    top: 18,
-    width: 34,
-    height: 34,
-    borderRightWidth: 2,
-    borderTopWidth: 2,
-    borderColor: '#ffffff',
-    opacity: 0.82,
-  },
-  frameBottomLeft: {
-    position: 'absolute',
-    left: 18,
-    bottom: 18,
-    width: 34,
-    height: 34,
-    borderLeftWidth: 2,
-    borderBottomWidth: 2,
-    borderColor: '#ffffff',
-    opacity: 0.82,
-  },
-  frameBottomRight: {
-    position: 'absolute',
-    right: 18,
-    bottom: 18,
-    width: 34,
-    height: 34,
-    borderRightWidth: 2,
-    borderBottomWidth: 2,
-    borderColor: '#ffffff',
-    opacity: 0.82,
-  },
-  previewFooter: {
-    minHeight: 46,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    backgroundColor: '#102b40',
-    borderTopWidth: 1,
-    borderTopColor: '#28495f',
-  },
-  previewMeta: {
-    color: '#c6d4df',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  controls: {
-    minHeight: 136,
-    backgroundColor: colors.backgroundDeep,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.page,
-    paddingVertical: 14,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.line,
-  },
-  toolCard: {
-    width: 96,
-    minHeight: 102,
-    borderRadius: spacing.radius,
-    backgroundColor: '#f8fbfd',
-    borderWidth: 1,
-    borderColor: colors.line,
+  emptyPreview: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8,
   },
-  toolIconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+  emptyPreviewImage: {
+    opacity: 0.16,
+  },
+  emptyPreviewScrim: {
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primarySoft,
+    backgroundColor: 'rgba(243, 251, 253, 0.76)',
   },
-  toolLabel: {
-    color: colors.ink,
-    fontSize: 14,
-    marginTop: 8,
+  emptyPreviewText: {
+    color: recognitionPalette.primaryText,
+    fontSize: 22,
     fontWeight: '900',
+    textShadowColor: 'rgba(255, 255, 255, 0.82)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
   },
-  toolText: {
-    color: colors.muted,
+  previewInfoRow: {
+    minHeight: 62,
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: recognitionPalette.line,
+    backgroundColor: recognitionPalette.surfaceSoft,
+  },
+  infoCell: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    borderRightWidth: 1,
+    borderRightColor: recognitionPalette.line,
+  },
+  infoLabel: {
+    color: recognitionPalette.muted,
     fontSize: 11,
-    marginTop: 3,
-    fontWeight: '700',
-    textAlign: 'center',
+    fontWeight: '800',
   },
-  captureButton: {
-    width: 130,
-    minHeight: 112,
+  infoValue: {
+    color: recognitionPalette.primaryText,
+    fontSize: 13,
+    fontWeight: '900',
+    marginTop: 4,
+  },
+  controlPanel: {
+    marginTop: 14,
     borderRadius: spacing.radius,
-    backgroundColor: colors.primaryDark,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: '#2f6d96',
-    ...shadow,
+    borderColor: recognitionPalette.line,
+    backgroundColor: recognitionPalette.surface,
+    padding: 12,
   },
-  captureIconBox: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+  controlHeader: {
+    minHeight: 22,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-    borderWidth: 1,
-    borderColor: '#6fa4c5',
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
-  captureLabel: {
-    color: '#ffffff',
+  controlTitle: {
+    color: recognitionPalette.primaryText,
     fontSize: 15,
     fontWeight: '900',
-    marginTop: 8,
   },
-  captureText: {
-    color: '#c8d9e6',
+  controlMeta: {
+    color: recognitionPalette.muted,
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  controls: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  actionButton: {
+    flex: 1,
+    minHeight: 84,
+    borderRadius: spacing.radius,
+    borderWidth: 1,
+    borderColor: recognitionPalette.line,
+    backgroundColor: recognitionPalette.cyanSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  actionButtonPrimary: {
+    backgroundColor: recognitionPalette.primary,
+    borderColor: recognitionPalette.primary,
+  },
+  actionTitle: {
+    color: recognitionPalette.primaryText,
+    fontSize: 13,
+    fontWeight: '900',
+    marginTop: 6,
+  },
+  actionTitlePrimary: {
+    color: '#ffffff',
+  },
+  actionSubtitle: {
+    color: recognitionPalette.muted,
     fontSize: 11,
     fontWeight: '700',
-    marginTop: 3,
+    marginTop: 2,
+  },
+  actionSubtitlePrimary: {
+    color: colors.primarySoft,
   },
   footer: {
-    backgroundColor: colors.surface,
+    backgroundColor: recognitionPalette.surface,
+    marginHorizontal: -spacing.page,
+    marginTop: 14,
     padding: spacing.page,
     gap: 12,
     borderTopWidth: 1,
-    borderTopColor: colors.line,
+    borderTopColor: recognitionPalette.line,
   },
   hint: {
-    color: colors.muted,
-    fontSize: 15,
+    color: recognitionPalette.muted,
+    fontSize: 13,
+    fontWeight: '700',
     textAlign: 'center',
   },
 });

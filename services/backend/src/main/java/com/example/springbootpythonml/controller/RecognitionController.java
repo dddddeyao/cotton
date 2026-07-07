@@ -6,6 +6,7 @@ import com.example.springbootpythonml.dto.RecognitionBase64Request;
 import com.example.springbootpythonml.dto.RecognitionHistoryItem;
 import com.example.springbootpythonml.dto.RecognitionResult;
 import com.example.springbootpythonml.service.RecognitionService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -25,11 +26,17 @@ public class RecognitionController {
 
     private final RecognitionService recognitionService;
     private final RecognitionRequestHandler recognitionRequestHandler;
+    private final int maxBase64Chars;
+    private final long maxImageBytes;
 
     public RecognitionController(RecognitionService recognitionService,
-                                 RecognitionRequestHandler recognitionRequestHandler) {
+                                 RecognitionRequestHandler recognitionRequestHandler,
+                                 @Value("${app.recognition.max-base64-chars:14000000}") int maxBase64Chars,
+                                 @Value("${app.recognition.max-image-bytes:10485760}") long maxImageBytes) {
         this.recognitionService = recognitionService;
         this.recognitionRequestHandler = recognitionRequestHandler;
+        this.maxBase64Chars = maxBase64Chars;
+        this.maxImageBytes = maxImageBytes;
     }
 
     @PostMapping
@@ -54,11 +61,21 @@ public class RecognitionController {
             return ResponseEntity.badRequest().body(ApiResponse.error(400, "请上传图片文件"));
         }
 
+        String encoded = normalizeBase64Payload(request.getImageBase64());
+        if (encoded.length() > maxBase64Chars || estimatedDecodedBytes(encoded) > maxImageBytes) {
+            return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                    .body(ApiResponse.error(413, "图片文件不能超过 " + maxImageSizeMb() + "MB"));
+        }
+
         byte[] imageBytes;
         try {
-            imageBytes = Base64.getDecoder().decode(stripDataUrlPrefix(request.getImageBase64()));
+            imageBytes = Base64.getDecoder().decode(encoded);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(400, "图片数据格式不正确"));
+        }
+        if (imageBytes.length > maxImageBytes) {
+            return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                    .body(ApiResponse.error(413, "图片文件不能超过 " + maxImageSizeMb() + "MB"));
         }
 
         String filename = request.getFilename() == null || request.getFilename().isBlank()
@@ -109,12 +126,32 @@ public class RecognitionController {
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
+    private static String normalizeBase64Payload(String value) {
+        return stripDataUrlPrefix(value).replaceAll("\\s+", "");
+    }
+
     private static String stripDataUrlPrefix(String value) {
         int commaIndex = value.indexOf(',');
         if (value.startsWith("data:") && commaIndex >= 0) {
             return value.substring(commaIndex + 1);
         }
         return value;
+    }
+
+    private static long estimatedDecodedBytes(String encoded) {
+        int padding = 0;
+        int length = encoded.length();
+        if (length >= 1 && encoded.charAt(length - 1) == '=') {
+            padding++;
+        }
+        if (length >= 2 && encoded.charAt(length - 2) == '=') {
+            padding++;
+        }
+        return Math.max(0L, (length * 3L) / 4L - padding);
+    }
+
+    private long maxImageSizeMb() {
+        return Math.max(1, maxImageBytes / 1024 / 1024);
     }
 
     private static final class InMemoryMultipartFile implements MultipartFile {

@@ -1,5 +1,6 @@
 package com.example.springbootpythonml.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.time.LocalDateTime;
@@ -11,8 +12,21 @@ import java.time.LocalDateTime;
 public class RecognitionResult {
 
     // ===== 新增：与 Flask 顶层字段对应 =====
+    @JsonAlias("cotton_area_image")
     private String cottonAreaImage;     // data:image/png;base64,...
+    @JsonAlias("impurity_area_image")
     private String impurityAreaImage;   // data:image/png;base64,...
+    @JsonAlias("cotton_mask_image")
+    private String cottonMaskImage;
+    @JsonAlias("impurity_mask_image")
+    private String impurityMaskImage;
+    @JsonAlias("cotton_overlay_image")
+    private String cottonOverlayImage;
+    @JsonAlias("impurity_overlay_image")
+    private String impurityOverlayImage;
+    @JsonAlias("black_background_impurity_overlay")
+    private String blackBackgroundImpurityOverlay;
+    @JsonAlias("detection_result")
     private DetectionResult detectionResult; // 对应 Flask 的 detectionResult {...}
 
     // ===== 兼容旧字段（老前端/日志可能还在用）=====
@@ -24,6 +38,7 @@ public class RecognitionResult {
     private String imageUri;
     private LocalDateTime createdAt;
     private String conclusion;
+    @JsonAlias("error")
     private String errorMessage;
     private LocalDateTime timestamp;
     private String filename;
@@ -54,6 +69,23 @@ public class RecognitionResult {
 
     public String getImpurityAreaImage() { return impurityAreaImage; }
     public void setImpurityAreaImage(String impurityAreaImage) { this.impurityAreaImage = impurityAreaImage; }
+
+    public String getCottonMaskImage() { return cottonMaskImage; }
+    public void setCottonMaskImage(String cottonMaskImage) { this.cottonMaskImage = cottonMaskImage; }
+
+    public String getImpurityMaskImage() { return impurityMaskImage; }
+    public void setImpurityMaskImage(String impurityMaskImage) { this.impurityMaskImage = impurityMaskImage; }
+
+    public String getCottonOverlayImage() { return cottonOverlayImage; }
+    public void setCottonOverlayImage(String cottonOverlayImage) { this.cottonOverlayImage = cottonOverlayImage; }
+
+    public String getImpurityOverlayImage() { return impurityOverlayImage; }
+    public void setImpurityOverlayImage(String impurityOverlayImage) { this.impurityOverlayImage = impurityOverlayImage; }
+
+    public String getBlackBackgroundImpurityOverlay() { return blackBackgroundImpurityOverlay; }
+    public void setBlackBackgroundImpurityOverlay(String blackBackgroundImpurityOverlay) {
+        this.blackBackgroundImpurityOverlay = blackBackgroundImpurityOverlay;
+    }
 
     public DetectionResult getDetectionResult() { return detectionResult; }
     public void setDetectionResult(DetectionResult detectionResult) { this.detectionResult = detectionResult; }
@@ -91,6 +123,12 @@ public class RecognitionResult {
         return "RecognitionResult{" +
                 "cottonAreaImage(len)=" + (cottonAreaImage == null ? 0 : cottonAreaImage.length()) +
                 ", impurityAreaImage(len)=" + (impurityAreaImage == null ? 0 : impurityAreaImage.length()) +
+                ", cottonMaskImage(len)=" + (cottonMaskImage == null ? 0 : cottonMaskImage.length()) +
+                ", impurityMaskImage(len)=" + (impurityMaskImage == null ? 0 : impurityMaskImage.length()) +
+                ", cottonOverlayImage(len)=" + (cottonOverlayImage == null ? 0 : cottonOverlayImage.length()) +
+                ", impurityOverlayImage(len)=" + (impurityOverlayImage == null ? 0 : impurityOverlayImage.length()) +
+                ", blackBackgroundImpurityOverlay(len)=" +
+                (blackBackgroundImpurityOverlay == null ? 0 : blackBackgroundImpurityOverlay.length()) +
                 ", detectionResult=" + (detectionResult == null ? null : detectionResult.getColorGrade()) +
                 ", id=" + id +
                 ", label='" + label + '\'' +

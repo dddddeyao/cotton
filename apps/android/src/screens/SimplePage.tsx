@@ -1,8 +1,10 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { EmptyState, StackPage } from '../components/common';
-import { colors, spacing } from '../theme';
+import { colors, shadow, spacing } from '../theme';
+
+const androidBottomInset = Platform.OS === 'android' ? 34 : 0;
 
 export function SimplePage({
   title,
@@ -20,7 +22,10 @@ export function SimplePage({
       {variant === 'document' ? (
         <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
           <View style={styles.documentPanel}>
-            <Text style={styles.documentTitle}>{title}</Text>
+            <View style={styles.documentHeader}>
+              <Text style={styles.documentTitle}>{title}</Text>
+              <Text style={styles.documentCode}>DOC</Text>
+            </View>
             <Text style={styles.documentBody}>{body}</Text>
           </View>
         </ScrollView>
@@ -35,24 +40,46 @@ export function SimplePage({
 
 const styles = StyleSheet.create({
   page: {
+    flexGrow: 1,
     padding: spacing.page,
+    paddingBottom: spacing.page + androidBottomInset,
+    backgroundColor: colors.background,
   },
   documentPanel: {
     borderRadius: spacing.radius,
     borderWidth: 1,
     borderColor: colors.line,
-    backgroundColor: colors.surfaceStrong,
-    padding: 18,
+    backgroundColor: colors.surface,
+    padding: 16,
+    ...shadow,
+  },
+  documentHeader: {
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+    marginBottom: 12,
   },
   documentTitle: {
     color: colors.ink,
-    fontSize: 19,
+    fontSize: 18,
     fontWeight: '900',
-    marginBottom: 12,
+  },
+  documentCode: {
+    color: colors.primaryDark,
+    fontSize: 11,
+    fontWeight: '900',
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.line,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   documentBody: {
-    color: colors.muted,
-    fontSize: 15,
-    lineHeight: 24,
+    color: '#253240',
+    fontSize: 14,
+    lineHeight: 22,
   },
 });

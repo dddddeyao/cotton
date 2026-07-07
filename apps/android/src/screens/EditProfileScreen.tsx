@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { EmptyState, PrimaryButton, StackPage } from '../components/common';
 import { api } from '../services/api';
-import { colors, spacing } from '../theme';
+import { colors, shadow, spacing } from '../theme';
 import { UserProfile, UserSession } from '../types';
+
+const androidBottomInset = Platform.OS === 'android' ? 34 : 0;
 
 type ProfileForm = Omit<UserProfile, 'username'>;
 
@@ -17,7 +19,7 @@ const defaultProfile: ProfileForm = {
   nickname: '',
   phone: '',
   organization: '',
-  role: '研究人员',
+  role: '',
 };
 
 export function EditProfileScreen({
@@ -109,89 +111,135 @@ export function EditProfileScreen({
 
   return (
     <StackPage title="编辑资料" onBack={onBack}>
-      <View style={styles.page}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
         {session ? (
-          <>
-            <Text style={styles.fieldLabel}>账号</Text>
-            <TextInput value={session.username} editable={false} style={styles.formInput} />
-            <Text style={styles.fieldLabel}>昵称</Text>
-            <TextInput
-              placeholder="昵称"
-              placeholderTextColor={colors.muted}
-              style={styles.formInput}
-              value={visibleProfile.nickname}
-              onChangeText={(value) => updateField('nickname', value)}
-            />
-            <Text style={styles.fieldLabel}>手机号</Text>
-            <TextInput
-              placeholder="手机号"
-              placeholderTextColor={colors.muted}
-              keyboardType="phone-pad"
-              style={styles.formInput}
-              value={visibleProfile.phone}
-              onChangeText={(value) => updateField('phone', value)}
-            />
-            <Text style={styles.fieldLabel}>单位</Text>
-            <TextInput
-              placeholder="单位"
-              placeholderTextColor={colors.muted}
-              style={styles.formInput}
-              value={visibleProfile.organization}
-              onChangeText={(value) => updateField('organization', value)}
-            />
-            <Text style={styles.fieldLabel}>身份</Text>
-            <TextInput
-              placeholder="身份"
-              placeholderTextColor={colors.muted}
-              style={styles.formInput}
-              value={visibleProfile.role}
-              onChangeText={(value) => updateField('role', value)}
-            />
+          <View style={styles.formPanel}>
+            <View style={styles.formHeader}>
+              <Text style={styles.formTitle}>账号资料维护</Text>
+              <Text style={styles.formMeta}>{isLoading ? '同步中' : '可编辑'}</Text>
+            </View>
+            <Field label="账号" value={session.username} editable={false} />
+            <Field label="昵称" value={visibleProfile.nickname} onChangeText={(value) => updateField('nickname', value)} placeholder="昵称" />
+            <Field label="手机号" value={visibleProfile.phone} onChangeText={(value) => updateField('phone', value)} placeholder="手机号" keyboardType="phone-pad" />
+            <Field label="单位" value={visibleProfile.organization} onChangeText={(value) => updateField('organization', value)} placeholder="单位" />
+            <Field label="身份" value={visibleProfile.role} onChangeText={(value) => updateField('role', value)} placeholder="身份" />
             <PrimaryButton
-              title={isSaving ? '保存中...' : isLoading ? '同步中...' : '保存'}
+              title={isSaving ? '保存中...' : isLoading ? '同步中...' : '保存资料'}
               disabled={isSaving || isLoading}
               onPress={saveProfile}
             />
-          </>
-        ) : (
-          <EmptyState title="请先登录" text="登录后可以编辑账号资料。" />
-        )}
-        {!session ? (
-          <View style={styles.loginButtonWrap}>
-            <PrimaryButton
-              title="去登录"
-              onPress={() => {
-                onRequireLogin();
-                onBack();
-              }}
-            />
           </View>
-        ) : null}
-      </View>
+        ) : (
+          <>
+            <EmptyState title="请先登录" text="登录后可以编辑账号资料。" />
+            <View style={styles.loginButtonWrap}>
+              <PrimaryButton
+                title="去登录"
+                onPress={() => {
+                  onRequireLogin();
+                  onBack();
+                }}
+              />
+            </View>
+          </>
+        )}
+      </ScrollView>
     </StackPage>
   );
 }
 
+function Field({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  editable = true,
+  keyboardType,
+}: {
+  label: string;
+  value: string;
+  onChangeText?: (value: string) => void;
+  placeholder?: string;
+  editable?: boolean;
+  keyboardType?: 'default' | 'phone-pad';
+}) {
+  return (
+    <View style={styles.fieldRow}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput
+        value={value}
+        editable={editable}
+        placeholder={placeholder}
+        placeholderTextColor={colors.muted}
+        keyboardType={keyboardType}
+        style={[styles.formInput, !editable && styles.formInputReadonly]}
+        onChangeText={onChangeText}
+      />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  scroll: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
   page: {
+    flexGrow: 1,
     padding: spacing.page,
-    gap: 10,
+    paddingBottom: spacing.page + androidBottomInset,
+    backgroundColor: colors.background,
+  },
+  formPanel: {
+    borderRadius: spacing.radius,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+    padding: 14,
+    ...shadow,
+  },
+  formHeader: {
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+    marginBottom: 12,
+  },
+  formTitle: {
+    color: colors.ink,
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  formMeta: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  fieldRow: {
+    marginBottom: 10,
   },
   fieldLabel: {
     color: colors.muted,
-    fontSize: 14,
-    marginTop: 4,
+    fontSize: 12,
+    fontWeight: '900',
+    marginBottom: 5,
   },
   formInput: {
-    minHeight: 52,
+    minHeight: 48,
     borderRadius: spacing.radius,
-    backgroundColor: colors.surfaceStrong,
+    backgroundColor: '#f8fdff',
     borderWidth: 1,
     borderColor: colors.line,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     color: colors.ink,
-    fontSize: 16,
-    marginBottom: 8,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  formInputReadonly: {
+    backgroundColor: '#e7f4f8',
+    color: colors.muted,
   },
   loginButtonWrap: {
     marginTop: 16,

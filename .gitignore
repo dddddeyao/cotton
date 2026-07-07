@@ -43,6 +43,9 @@ yarn-error.*
 .DS_Store
 Thumbs.db
 
+# ===== Codex local workspace artifacts =====
+.codex/
+
 # ===== Env =====
 .env
 .env.local
@@ -51,6 +54,11 @@ Thumbs.db
 # ===== Uploads =====
 uploads/
 output/
+datasets/
 
 # ===== Python 模型权重 (大文件) =====
 *.pth
+
+# ===== Mobile release artifacts =====
+*.apk
+*.aab
