@@ -98,23 +98,19 @@ ok "Docker: $(docker --version)"
 docker compose version &>/dev/null || { err "docker compose 未安装"; exit 1; }
 ok "docker compose: $(docker compose version)"
 
-# 检查 GPU
+# 检查 GPU（必须同时满足：有显卡 + Docker 已配置 nvidia runtime，否则回退 CPU）
 if nvidia-smi &>/dev/null; then
-  ok "NVIDIA GPU 可用"
-  HAS_GPU=true
+  if docker info 2>/dev/null | grep -qi 'nvidia'; then
+    ok "NVIDIA GPU 可用（Docker 已配置 nvidia runtime）"
+    HAS_GPU=true
+  else
+    warn "检测到 NVIDIA GPU，但 Docker 未配置 nvidia runtime"
+    warn "本次将使用 CPU 推理；如需 GPU 加速，请先安装 nvidia-container-toolkit 后重跑本脚本"
+    HAS_GPU=false
+  fi
 else
   warn "未检测到 NVIDIA GPU，将使用 CPU 推理（速度较慢）"
   HAS_GPU=false
-fi
-
-# 检查 nvidia-container-toolkit（仅 GPU 需要）
-if $HAS_GPU; then
-  if docker info 2>/dev/null | grep -q 'nvidia'; then
-    ok "nvidia-container-toolkit 已配置"
-  else
-    warn "nvidia-container-toolkit 未配置，模型服务将在 CPU 上运行"
-    warn "安装: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html"
-  fi
 fi
 
 # ── 端口占用检查（避免与他人服务冲突）──
