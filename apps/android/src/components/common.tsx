@@ -2,37 +2,50 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, shadow, spacing } from '../theme';
+import { colors, recordTheme, shadow, spacing } from '../theme';
 
 export function StackPage({
   title,
   onBack,
+  centerTitle = false,
+  tone = 'brand',
   children,
 }: {
   title: string;
   onBack: () => void;
+  centerTitle?: boolean;
+  // 'neutral' 使用识别记录页的中性灰配色，默认保持原有品牌配色
+  tone?: 'brand' | 'neutral';
   children: React.ReactNode;
 }) {
   const handleBack = React.useCallback(() => {
     onBack();
   }, [onBack]);
+  const neutral = tone === 'neutral';
 
   return (
     <View style={styles.stackRoot}>
-      <View style={styles.stackHeader}>
+      <View style={[styles.stackHeader, neutral && styles.stackHeaderNeutral]}>
         <Pressable
-          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+          style={({ pressed }) => [
+            styles.backButton,
+            neutral && styles.backButtonNeutral,
+            pressed && styles.backButtonPressed,
+          ]}
           onPress={handleBack}
           accessibilityRole="button"
           accessibilityLabel="返回"
           android_ripple={{ color: '#e7f4f8', borderless: false }}
           hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
         >
-          <Ionicons name="chevron-back" size={24} color={colors.ink} />
+          <Ionicons name="chevron-back" size={24} color={neutral ? recordTheme.textStrong : colors.ink} />
         </Pressable>
-        <View style={styles.stackTitleBlock}>
-          <Text style={styles.stackTitle}>{title}</Text>
+        <View style={[styles.stackTitleBlock, centerTitle && styles.stackTitleBlockCentered]}>
+          <Text style={[styles.stackTitle, neutral && styles.stackTitleNeutral, centerTitle && styles.stackTitleCentered]}>
+            {title}
+          </Text>
         </View>
+        {centerTitle ? <View style={styles.stackHeaderSpacer} /> : null}
       </View>
       {children}
     </View>
@@ -144,6 +157,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
   },
+  stackHeaderNeutral: {
+    minHeight: 54,
+    borderBottomColor: recordTheme.border,
+  },
   backButton: {
     width: 40,
     height: 40,
@@ -154,6 +171,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#ffffff',
   },
+  backButtonNeutral: {
+    borderColor: recordTheme.border,
+  },
   backButtonPressed: {
     opacity: 0.62,
   },
@@ -161,10 +181,24 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 12,
   },
+  stackTitleBlockCentered: {
+    marginLeft: 0,
+  },
   stackTitle: {
     color: colors.ink,
     fontSize: 17,
     fontWeight: '900',
+  },
+  stackTitleCentered: {
+    textAlign: 'center',
+  },
+  stackTitleNeutral: {
+    color: recordTheme.textStrong,
+    fontWeight: '700',
+  },
+  stackHeaderSpacer: {
+    width: 40,
+    height: 40,
   },
 
   emptyPanel: {

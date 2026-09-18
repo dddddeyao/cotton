@@ -13,16 +13,20 @@ cotton-recognition-assistant/
       model-service-python/  # Flask / PyTorch 推理服务与模型资源
       src/                   # Spring Boot 源码
   assets/
-    icons/                   # App 图标、启动页图标
     references/              # 鸿蒙端截图、设计参考图
-    standards/               # 分类标准图片、表格、资料
   docs/
-    requirements.md          # Android 端需求文档
-    deployment.md            # 服务器 Docker 部署说明
-    lan-quick-start.md       # 局域网快速启动
-    lan-deployment.md        # 局域网完整部署说明
+    deployment-guide.md      # 局域网部署与使用手册（Windows / Linux，面向交付）
+    deployment.md            # 服务器 / 公网 Docker 部署说明
+    development.md           # 本地开发说明
     pre-deployment-checklist.md # 部署前检查清单
     pending-questions.md     # 待确认问题清单
+    requirements.md          # Android 端需求文档
+  deploy-lan.ps1             # Windows 一键部署脚本
+  deploy-lan.sh              # Linux 一键部署脚本
+  undeploy-lan.sh            # Linux 一键卸载 / 恢复原状（共用电脑用）
+  build-apk-lan.ps1          # 按局域网 IP 构建 APK
+  docker-compose.yml         # Windows / 通用 Compose
+  docker-compose.linux.yml   # Linux Compose（可选 GPU 加速）
 ```
 
 ## 子项目
@@ -88,7 +92,7 @@ blackBackgroundImpurityOverlay
 ## 接口配置
 
 - Android 可复制 `apps/android/.env.example` 为 `apps/android/.env.local` 并配置真实的 `EXPO_PUBLIC_API_BASE_URL`；真机联调或正式打包必须使用局域网 IP、服务器 IP 或域名。
-- Spring Boot 默认端口为 `8080`，Python Flask 推理服务默认端口为 `5000`。
+- Spring Boot 容器内端口为 `8080`，对外通过 `BACKEND_PUBLIC_PORT` 映射（默认 `8088`）；Python Flask 推理服务默认端口为 `5000`。
 - 根目录 `.env.example` 用于 Docker Compose，不会自动被 `apps/android` 的本地开发命令读取。
 
 ## 编译检查
@@ -110,24 +114,22 @@ docker compose up -d --build
 默认部署后暴露后端 API，Android 端直接配置后端地址：
 
 ```text
-http://服务器IP:8080
+http://服务器IP:8088
 ```
 
 后端健康检查：
 
 ```text
-http://服务器IP:8080/health
+http://服务器IP:8088/health
 ```
 
-详细步骤见 `docs/deployment.md`。
-
-如果部署目标是一台局域网电脑，并希望同一网络下的 Android 端访问，请优先阅读：
+如果部署目标是一台局域网电脑，并希望同一网络下的 Android 端访问，请直接阅读面向交付的手册：
 
 ```text
-docs/lan-quick-start.md
-docs/lan-deployment.md
-docs/pre-deployment-checklist.md
+docs/deployment-guide.md
 ```
+
+Windows 可用 `deploy-lan.ps1`，Linux 可用 `deploy-lan.sh` 一键完成部署、防火墙与开机自启配置。
 
 ## 当前核心结论
 

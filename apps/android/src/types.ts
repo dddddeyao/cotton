@@ -38,13 +38,12 @@ export type RecognitionResult = {
   label: string;
   timestamp: string;
   filename: string;
+  colorFeedbackImage: string | null;
   cottonMaskImage: string | null;
   impurityMaskImage: string | null;
   cottonOverlayImage: string | null;
   impurityOverlayImage: string | null;
   blackBackgroundImpurityOverlay: string | null;
-  cottonAreaImage: string | null;
-  impurityAreaImage: string | null;
   detectionResult: DetectionResult;
   metrics: RecognitionMetric[];
   conclusion: string;
@@ -69,9 +68,8 @@ export type RecognitionUploadFieldName = 'file' | 'image' | 'photo';
 export type AppView =
   | { name: 'tabs' }
   | { name: 'newsDetail'; item: NewsItem }
-  | { name: 'recognitionResult'; result: RecognitionResult; returnTo?: 'recognition' | 'history' }
+  | { name: 'recognitionResult'; result: RecognitionResult }
   | { name: 'recognitionHistory' }
   | { name: 'editProfile' }
   | { name: 'settings' }
   | { name: 'agreement'; kind: 'user' | 'privacy' };
-

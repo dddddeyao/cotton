@@ -88,7 +88,7 @@ Windows PowerShell：
 `apps/android/.env.local` 会在打包时写入 APK。打包前必须改成真实后端地址：
 
 ```text
-EXPO_PUBLIC_API_BASE_URL=http://服务器IP:8080
+EXPO_PUBLIC_API_BASE_URL=http://服务器IP:8088
 ```
 
 如果有域名和 HTTPS，优先使用：
@@ -135,7 +135,7 @@ backend        healthy
 再访问：
 
 ```text
-http://服务器IP:8080/health
+http://服务器IP:8088/health
 ```
 
 最后用真机验证登录、拍照识别、识别记录、新闻列表、新闻详情和上传图片访问。

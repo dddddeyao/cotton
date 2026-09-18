@@ -27,7 +27,7 @@ public class NewsCrawlerProperties {
             "棉花检验", "纤维检验", "HVI", "颜色级", "叶屑", "cotton",
             "海关", "检测", "识别", "图像识别", "质量检测", "质量", "纤维", "检验", "分级", "进口", "出口"));
     private List<String> rejectKeywords = new ArrayList<>(List.of(
-            "娱乐", "体育", "彩票", "游戏", "汽车", "房产", "招聘", "广告", "优惠券"));
+            "娱乐", "体育", "彩票", "游戏", "汽车", "房产", "招聘", "广告", "优惠券", "大宗商品涨跌榜", "商品报价动态", "生意社期货通", "生意社股票通"));
     private List<Source> sources = new ArrayList<>();
 
     public boolean isEnabled() { return enabled; }

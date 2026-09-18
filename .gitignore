@@ -62,3 +62,11 @@ datasets/
 # ===== Mobile release artifacts =====
 *.apk
 *.aab
+
+# ===== 开发 / 预览 / 发布临时产物（不提交） =====
+preview-checks/
+releases/
+ui-preview-*.png
+
+# ===== Gradle 本地分发包 =====
+gradle-*-bin.zip

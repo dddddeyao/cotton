@@ -11,7 +11,7 @@
 内存：8GB 起，模型推理建议 16GB+
 磁盘：30GB 起，另需预留模型权重和 Docker 镜像空间
 软件：Docker、Docker Compose
-开放端口：8080 或自定义 BACKEND_PUBLIC_PORT
+开放端口：8088 或自定义 BACKEND_PUBLIC_PORT
 ```
 
 如果需要通过域名或 HTTPS 访问，可在后端前增加 Caddy、Nginx Proxy Manager、宝塔、云厂商负载均衡或自行配置反向代理证书。
@@ -77,9 +77,9 @@ docker compose logs -f model-service
 访问地址：
 
 ```text
-后端 API：http://服务器IP:8080
-健康检查：http://服务器IP:8080/health
-上传图片：http://服务器IP:8080/uploads/{filename}
+后端 API：http://服务器IP:8088
+健康检查：http://服务器IP:8088/health
+上传图片：http://服务器IP:8088/uploads/{filename}
 ```
 
 如果绑定域名并反向代理到后端，例如 `https://cotton.example.com`：
@@ -94,7 +94,7 @@ Android API 地址：https://cotton.example.com
 Android 打包前，在 `apps/android/.env.local` 中配置：
 
 ```text
-EXPO_PUBLIC_API_BASE_URL=http://服务器IP:8080
+EXPO_PUBLIC_API_BASE_URL=http://服务器IP:8088
 ```
 
 如果使用 HTTPS 域名：
@@ -128,7 +128,7 @@ EXPO_PUBLIC_API_BASE_URL=https://cotton.example.com
 ```text
 1. 检查 MySQL 容器是否正常。
 2. 确认 .env 中数据库账号密码一致。
-3. 打开 http://服务器IP:8080/health 验证后端是否可达。
+3. 打开 http://服务器IP:8088/health 验证后端是否可达。
 ```
 
 账号相关接口依赖登录 token：

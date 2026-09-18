@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Dimensions, Platform, Pressable, StatusBar as NativeStatusBar, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { colors, spacing } from '../theme';
 import { TabKey } from '../types';
+import { getAndroidBottomInset } from '../utils/safeArea';
 
 type TabConfig = {
   key: TabKey;
@@ -11,24 +12,9 @@ type TabConfig = {
   icon: keyof typeof Ionicons.glyphMap;
 };
 
-const androidBottomInsetFallback = 16;
-const androidBottomInsetMax = 48;
 const tabBarHeight = 64;
 const tabBarBottomPadding = 8;
 const tabItemHeight = 50;
-
-function getAndroidBottomInset(windowHeight: number) {
-  if (Platform.OS !== 'android') {
-    return 0;
-  }
-
-  const screenHeight = Dimensions.get('screen').height;
-  const statusBarHeight = NativeStatusBar.currentHeight ?? 0;
-  const systemBarsHeight = Math.max(0, Math.round(screenHeight - windowHeight));
-  const navigationBarHeight = Math.max(0, systemBarsHeight - statusBarHeight);
-
-  return Math.min(Math.max(navigationBarHeight, androidBottomInsetFallback), androidBottomInsetMax);
-}
 
 const tabs: TabConfig[] = [
   { key: 'news', label: '前沿瞭望', icon: 'newspaper-outline' },
@@ -99,7 +85,8 @@ const styles = StyleSheet.create({
   tabItem: {
     flex: 1,
     height: tabItemHeight,
-    borderRadius: spacing.radius,
+    // 底部标签栏保持原有圆角，不跟随全局放大
+    borderRadius: spacing.tabRadius,
     borderWidth: 1,
     borderColor: 'transparent',
     alignItems: 'center',

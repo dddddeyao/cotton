@@ -18,12 +18,8 @@ public class RecognitionRecord {
     private String imageUri;
 
     @Lob
-    @Column(name = "cotton_area_image", columnDefinition = "LONGTEXT")
-    private String cottonAreaImage;
-
-    @Lob
-    @Column(name = "impurity_area_image", columnDefinition = "LONGTEXT")
-    private String impurityAreaImage;
+    @Column(name = "color_feedback_image", columnDefinition = "LONGTEXT")
+    private String colorFeedbackImage;
 
     @Lob
     @Column(name = "cotton_mask_image", columnDefinition = "LONGTEXT")
@@ -85,11 +81,8 @@ public class RecognitionRecord {
     public String getImageUri() { return imageUri; }
     public void setImageUri(String imageUri) { this.imageUri = imageUri; }
 
-    public String getCottonAreaImage() { return cottonAreaImage; }
-    public void setCottonAreaImage(String cottonAreaImage) { this.cottonAreaImage = cottonAreaImage; }
-
-    public String getImpurityAreaImage() { return impurityAreaImage; }
-    public void setImpurityAreaImage(String impurityAreaImage) { this.impurityAreaImage = impurityAreaImage; }
+    public String getColorFeedbackImage() { return colorFeedbackImage; }
+    public void setColorFeedbackImage(String colorFeedbackImage) { this.colorFeedbackImage = colorFeedbackImage; }
 
     public String getCottonMaskImage() { return cottonMaskImage; }
     public void setCottonMaskImage(String cottonMaskImage) { this.cottonMaskImage = cottonMaskImage; }

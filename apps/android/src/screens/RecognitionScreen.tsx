@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
-import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import React, { useState } from 'react';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '../components/common';
+import { ImagePreviewModal, PreviewImage } from '../components/ImagePreviewModal';
 import { colors, shadow, spacing } from '../theme';
 
-const emptyPreviewImage = require('../../assets/recognition-empty-bg.png');
 
 const recognitionPalette = {
   background: colors.background,
@@ -21,6 +21,10 @@ const recognitionPalette = {
   instrumentInk: '#111827',
 };
 
+// 页面与卡片内边距：收紧留白，让内容更充分地铺开
+const pagePadding = 12;
+const panelPadding = 10;
+
 export function RecognitionScreen({
   imageUri,
   isRecognizing,
@@ -34,112 +38,86 @@ export function RecognitionScreen({
   onRecognize: () => void;
   onOpenHistory: () => void | Promise<void>;
 }) {
-  const acquisitionState = isRecognizing ? '检测中' : imageUri ? '已载入' : '待上传';
-  const inputState = imageUri ? '本地图像' : '无输入';
-  const pipelineState = isRecognizing ? '处理中' : imageUri ? '待开始' : '未开始';
-  const { height } = useWindowDimensions();
-  const previewViewportHeight = Math.max(184, Math.min(282, Math.round(height * 0.31)));
-  return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <View style={styles.headerPanel}>
-        <View>
-          <View style={styles.headerTitleRow}>
-            <View style={[styles.signalDot, imageUri && styles.signalDotReady, isRecognizing && styles.signalDotActive]} />
-            <Text style={styles.headerTitle}>棉花样本分析</Text>
-          </View>
-          <Text style={styles.headerText}>棉花样本视觉采集与识别提交</Text>
-        </View>
-        <View style={[styles.statusCell, imageUri && styles.statusCellReady]}>
-          <Text style={styles.statusLabel}>任务状态</Text>
-          <Text style={[styles.statusText, imageUri && styles.statusTextReady]}>{acquisitionState}</Text>
-        </View>
-      </View>
+  const [previewImage, setPreviewImage] = useState<PreviewImage>(null);
 
-      <View style={styles.previewPanel}>
-        <View style={styles.panelHeader}>
-          <View>
-            <Text style={styles.panelTitle}>样本预览舱</Text>
-            <Text style={styles.panelSubTitle}>VISUAL ACQUISITION</Text>
-          </View>
-          <View style={styles.panelMetaGroup}>
-            <View style={[styles.metaDot, imageUri && styles.metaDotReady, isRecognizing && styles.metaDotActive]} />
-            <Text style={styles.panelMeta}>{imageUri ? '已载入' : '未载入'}</Text>
-          </View>
-        </View>
-        <View style={[styles.previewViewport, { height: previewViewportHeight }]}>
-          {imageUri ? (
-            <Image source={{ uri: imageUri }} style={styles.previewImage} />
-          ) : (
-            <ImageBackground
-              source={emptyPreviewImage}
-              style={styles.emptyPreview}
-              imageStyle={styles.emptyPreviewImage}
-              resizeMode="cover"
-            >
-              <View style={styles.emptyPreviewScrim}>
-                <Text style={styles.emptyPreviewText}>请上传照片</Text>
+  return (
+    <>
+      <ScrollView style={styles.root} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <Text style={styles.screenTitle}>棉花识别</Text>
+
+        <View style={styles.previewPanel}>
+          <Text style={styles.panelTitle}>样本预览</Text>
+          {/* 点击样本预览可放大查看 */}
+          <Pressable
+            style={styles.previewViewport}
+            onPress={() => {
+              if (imageUri) {
+                setPreviewImage({ title: '样本预览', uri: imageUri });
+              }
+            }}
+            disabled={!imageUri}
+            accessibilityRole="imagebutton"
+            accessibilityLabel="放大样本预览"
+          >
+            {imageUri ? (
+              <Image source={{ uri: imageUri }} style={styles.previewImage} />
+            ) : (
+              <View style={styles.emptyPreview}>
+                <View style={styles.emptyPreviewFrame}>
+                  <Ionicons name="scan-outline" size={40} color={recognitionPalette.primary} />
+                  <Text style={styles.emptyPreviewText}>{"\u8bf7\u4e0a\u4f20\u7167\u7247"}</Text>
+                </View>
               </View>
-            </ImageBackground>
-          )}
+            )}
+          </Pressable>
         </View>
-        <View style={styles.previewInfoRow}>
-          <InfoCell label="对象" value="棉花样本" />
-          <InfoCell label="输入" value={inputState} />
-          <InfoCell label="流程" value={pipelineState} />
-        </View>
-      </View>
 
-      <View style={styles.controlPanel}>
-        <View style={styles.controlHeader}>
-          <Text style={styles.controlTitle}>任务操作</Text>
-          <Text style={styles.controlMeta}>INPUT / RUN / ARCHIVE</Text>
+        <View style={styles.controlPanel}>
+          <View style={styles.controls}>
+            <ActionButton icon="image-outline" title="导入图片" onPress={() => onPickImage('library')} />
+            <ActionButton icon="camera-outline" title="拍摄样本" primary emphasis onPress={() => onPickImage('camera')} />
+            <ActionButton icon="reader-outline" title="检测记录" onPress={onOpenHistory} />
+          </View>
         </View>
-        <View style={styles.controls}>
-          <ActionButton icon="image-outline" title="导入图片" subtitle="相册模式" onPress={() => onPickImage('library')} />
-          <ActionButton icon="camera-outline" title="拍摄样本" subtitle="相机模式" primary onPress={() => onPickImage('camera')} />
-          <ActionButton icon="reader-outline" title="检测记录" subtitle="参数记录" onPress={onOpenHistory} />
+
+        <View style={styles.footer}>
+          <PrimaryButton
+            title={isRecognizing ? '检测中...' : '开始检测'}
+            onPress={onRecognize}
+            disabled={!imageUri || isRecognizing}
+          />
         </View>
-      </View>
+      </ScrollView>
 
-      <View style={styles.footer}>
-        <Text style={styles.hint}>{imageUri ? '样本图像已准备，可提交检测。' : '请导入或拍摄棉花样本图像。'}</Text>
-        <PrimaryButton
-          title={isRecognizing ? '检测中...' : '开始检测'}
-          onPress={onRecognize}
-          disabled={!imageUri || isRecognizing}
-        />
-      </View>
-    </ScrollView>
-  );
-}
-
-function InfoCell({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.infoCell}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
-    </View>
+      <ImagePreviewModal preview={previewImage} onClose={() => setPreviewImage(null)} />
+    </>
   );
 }
 
 function ActionButton({
   icon,
   title,
-  subtitle,
   primary = false,
+  emphasis = false,
   onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
-  subtitle: string;
   primary?: boolean;
+  // emphasis：中间“拍摄样本”按钮加宽加大，两侧按钮保持等宽
+  emphasis?: boolean;
   onPress: () => void | Promise<void>;
 }) {
   return (
-    <Pressable style={[styles.actionButton, primary && styles.actionButtonPrimary]} onPress={onPress} accessibilityRole="button">
-      <Ionicons name={icon} size={24} color={primary ? '#ffffff' : recognitionPalette.primary} />
-      <Text style={[styles.actionTitle, primary && styles.actionTitlePrimary]}>{title}</Text>
-      <Text style={[styles.actionSubtitle, primary && styles.actionSubtitlePrimary]}>{subtitle}</Text>
+    <Pressable
+      style={[styles.actionButton, emphasis && styles.actionButtonEmphasis, primary && styles.actionButtonPrimary]}
+      onPress={onPress}
+      accessibilityRole="button"
+    >
+      <Ionicons name={icon} size={emphasis ? 28 : 22} color={primary ? '#ffffff' : recognitionPalette.primary} />
+      <Text style={[styles.actionTitle, emphasis && styles.actionTitleEmphasis, primary && styles.actionTitlePrimary]}>
+        {title}
+      </Text>
     </Pressable>
   );
 }
@@ -151,232 +129,97 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
-    padding: spacing.page,
+    paddingHorizontal: pagePadding,
+    paddingTop: 14,
     paddingBottom: 0,
   },
-  headerPanel: {
-    minHeight: 78,
-    borderRadius: spacing.radius,
-    borderWidth: 1,
-    borderColor: recognitionPalette.line,
-    backgroundColor: recognitionPalette.surface,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    ...shadow,
-  },
-  headerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  signalDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: '#9aa8b3',
-  },
-  signalDotReady: {
-    backgroundColor: recognitionPalette.primary,
-  },
-  signalDotActive: {
-    backgroundColor: '#111827',
-  },
-  headerTitle: {
+  screenTitle: {
     color: recognitionPalette.primaryText,
-    fontSize: 19,
+    fontSize: 20,
     fontWeight: '900',
-  },
-  headerText: {
-    color: recognitionPalette.muted,
-    fontSize: 12,
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  statusCell: {
-    minWidth: 82,
-    minHeight: 42,
-    borderRadius: spacing.radius,
-    borderWidth: 1,
-    borderColor: recognitionPalette.line,
-    backgroundColor: recognitionPalette.cyanSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-  },
-  statusCellReady: {
-    backgroundColor: recognitionPalette.cyan,
-    borderColor: recognitionPalette.cyanLine,
-  },
-  statusLabel: {
-    color: recognitionPalette.muted,
-    fontSize: 9,
-    fontWeight: '900',
-    marginBottom: 2,
-  },
-  statusText: {
-    color: recognitionPalette.muted,
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  statusTextReady: {
-    color: recognitionPalette.primary,
+    textAlign: 'left',
+    marginBottom: 10,
   },
   previewPanel: {
-    marginTop: 14,
+    flex: 1,
+    minHeight: 400,
     borderRadius: spacing.radius,
     borderWidth: 1,
     borderColor: recognitionPalette.line,
     backgroundColor: recognitionPalette.surface,
-    overflow: 'hidden',
+    padding: panelPadding,
     ...shadow,
-  },
-  panelHeader: {
-    minHeight: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    backgroundColor: recognitionPalette.surfaceSoft,
-    borderBottomWidth: 1,
-    borderBottomColor: recognitionPalette.line,
   },
   panelTitle: {
     color: recognitionPalette.primaryText,
     fontSize: 15,
     fontWeight: '900',
-  },
-  panelSubTitle: {
-    color: recognitionPalette.muted,
-    fontSize: 9,
-    fontWeight: '900',
-    marginTop: 3,
-  },
-  panelMetaGroup: {
-    minHeight: 30,
-    borderRadius: spacing.radius,
-    borderWidth: 1,
-    borderColor: recognitionPalette.line,
-    backgroundColor: '#ffffff',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-  },
-  metaDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#9aa8b3',
-  },
-  metaDotReady: {
-    backgroundColor: recognitionPalette.primary,
-  },
-  metaDotActive: {
-    backgroundColor: recognitionPalette.instrumentInk,
-  },
-  panelMeta: {
-    color: recognitionPalette.muted,
-    fontSize: 12,
-    fontWeight: '800',
+    textAlign: 'left',
+    marginBottom: 10,
   },
   previewViewport: {
-    minHeight: 184,
-    backgroundColor: '#dfeef3',
+    flex: 1,
+    minHeight: 280,
+    borderRadius: spacing.radius,
+    backgroundColor: '#ffffff',
     overflow: 'hidden',
   },
   previewImage: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
+    resizeMode: 'contain',
+    backgroundColor: '#f8fcfd',
   },
   emptyPreview: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#ffffff',
   },
-  emptyPreviewImage: {
-    opacity: 0.16,
-  },
-  emptyPreviewScrim: {
-    ...StyleSheet.absoluteFill,
+  emptyPreviewFrame: {
+    width: '100%',
+    flex: 1,
+    borderWidth: 1,
+    borderColor: recognitionPalette.cyanLine,
+    borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(243, 251, 253, 0.76)',
+    gap: 10,
+    backgroundColor: '#ffffff',
   },
   emptyPreviewText: {
-    color: recognitionPalette.primaryText,
-    fontSize: 22,
-    fontWeight: '900',
-    textShadowColor: 'rgba(255, 255, 255, 0.82)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 8,
-  },
-  previewInfoRow: {
-    minHeight: 62,
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: recognitionPalette.line,
-    backgroundColor: recognitionPalette.surfaceSoft,
-  },
-  infoCell: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    borderRightWidth: 1,
-    borderRightColor: recognitionPalette.line,
-  },
-  infoLabel: {
-    color: recognitionPalette.muted,
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  infoValue: {
-    color: recognitionPalette.primaryText,
-    fontSize: 13,
-    fontWeight: '900',
-    marginTop: 4,
-  },
-  controlPanel: {
-    marginTop: 14,
-    borderRadius: spacing.radius,
-    borderWidth: 1,
-    borderColor: recognitionPalette.line,
-    backgroundColor: recognitionPalette.surface,
-    padding: 12,
-  },
-  controlHeader: {
-    minHeight: 22,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  controlTitle: {
     color: recognitionPalette.primaryText,
     fontSize: 15,
     fontWeight: '900',
   },
-  controlMeta: {
-    color: recognitionPalette.muted,
-    fontSize: 9,
-    fontWeight: '900',
+  controlPanel: {
+    marginTop: 10,
+    borderRadius: spacing.radius,
+    borderWidth: 1,
+    borderColor: recognitionPalette.line,
+    backgroundColor: recognitionPalette.surface,
+    padding: panelPadding,
   },
   controls: {
     flexDirection: 'row',
+    alignItems: 'stretch',
     gap: 10,
   },
   actionButton: {
     flex: 1,
-    minHeight: 84,
+    minHeight: 76,
     borderRadius: spacing.radius,
     borderWidth: 1,
     borderColor: recognitionPalette.line,
     backgroundColor: recognitionPalette.cyanSoft,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
+  },
+  // 中间“拍摄样本”更宽更高，两侧按钮等宽并被拉伸到同高，保持对齐
+  actionButtonEmphasis: {
+    flex: 1.4,
+    minHeight: 88,
   },
   actionButtonPrimary: {
     backgroundColor: recognitionPalette.primary,
@@ -388,31 +231,19 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     marginTop: 6,
   },
+  actionTitleEmphasis: {
+    fontSize: 15,
+  },
   actionTitlePrimary: {
     color: '#ffffff',
   },
-  actionSubtitle: {
-    color: recognitionPalette.muted,
-    fontSize: 11,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  actionSubtitlePrimary: {
-    color: colors.primarySoft,
-  },
   footer: {
     backgroundColor: recognitionPalette.surface,
-    marginHorizontal: -spacing.page,
-    marginTop: 14,
-    padding: spacing.page,
-    gap: 12,
+    marginHorizontal: -pagePadding,
+    marginTop: 10,
+    paddingHorizontal: pagePadding,
+    paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: recognitionPalette.line,
-  },
-  hint: {
-    color: recognitionPalette.muted,
-    fontSize: 13,
-    fontWeight: '700',
-    textAlign: 'center',
   },
 });

@@ -78,17 +78,7 @@ export function ProfileScreen({
 
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
-        <View style={styles.systemHeader}>
-          <View>
-            <Text style={styles.systemTitle}>系统账号管理</Text>
-            <Text style={styles.systemText}>用于检测记录同步、资料维护与系统设置</Text>
-          </View>
-          <View style={[styles.loginState, session && styles.loginStateActive]}>
-            <Text style={[styles.loginStateText, session && styles.loginStateTextActive]}>{session ? 'ONLINE' : 'OFFLINE'}</Text>
-          </View>
-        </View>
-
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
         {session ? (
           <View style={styles.sessionPanel}>
             <View style={styles.sessionRow}>
@@ -151,25 +141,16 @@ export function ProfileScreen({
           </View>
         )}
 
-        <View style={styles.moduleHeader}>
-          <Text style={styles.moduleHeaderText}>功能模块</Text>
-          <Text style={styles.moduleHeaderMeta}>ACCOUNT</Text>
-        </View>
         <View style={styles.profileCards}>
-          <ProfileAction icon="document-text-outline" title="资料维护" subtitle="Person Information" onPress={onOpenEditProfile} />
-          <ProfileAction icon="settings-outline" title="系统设置" subtitle="Settings" onPress={onOpenSettings} />
+          <ProfileAction title="资料维护" onPress={onOpenEditProfile} />
+          <ProfileAction title="系统设置" onPress={onOpenSettings} />
         </View>
 
-        <View style={styles.appIntro}>
-          <View style={styles.appIntroHeader}>
-            <Ionicons name="leaf-outline" size={18} color={colors.primaryDark} />
-            <Text style={styles.appIntroTitle}>App 功能简介</Text>
-          </View>
-          <Text style={styles.appIntroText}>
-            棉花识别助手整合图像识别、检测记录、行业资讯与账号资料维护，帮助快速完成样本分析、结果回看和信息管理。
-          </Text>
-        </View>
+        <Text style={styles.appIntroText}>棉花识别助手整合图像识别、检测记录、行业资讯与账号资料维护，帮助快速完成样本分析、结果回看和信息管理。</Text>
+      </ScrollView>
 
+      {/* 底部固定区域：用户协议、隐私政策、客服电话始终位于界面最下方 */}
+      <View style={styles.footer}>
         <View style={styles.profileLinks}>
           <Pressable onPress={() => onOpenAgreement('user')}>
             <Text style={styles.profileLinkText}>用户协议</Text>
@@ -178,9 +159,9 @@ export function ProfileScreen({
           <Pressable onPress={() => onOpenAgreement('privacy')}>
             <Text style={styles.profileLinkText}>隐私政策</Text>
           </Pressable>
-          <Text style={styles.customerService}>客服电话：18967096861</Text>
         </View>
-      </ScrollView>
+        <Text style={styles.customerService}>客服电话：18967096861</Text>
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -224,27 +205,17 @@ function PasswordField({
 }
 
 function ProfileAction({
-  icon,
   title,
-  subtitle,
   onPress,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
   title: string;
-  subtitle: string;
   onPress: () => void;
 }) {
   return (
     <Pressable style={styles.profileAction} onPress={onPress} accessibilityRole="button">
-      <Ionicons name={icon} size={22} color={colors.primaryDark} />
-      <View style={styles.profileActionText}>
-        <Text style={styles.profileActionTitle} numberOfLines={1}>
-          {title}
-        </Text>
-        <Text style={styles.profileActionSubtitle} numberOfLines={1}>
-          {subtitle}
-        </Text>
-      </View>
+      <Text style={styles.profileActionTitle} numberOfLines={1}>
+        {title}
+      </Text>
     </Pressable>
   );
 }
@@ -254,54 +225,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  scroll: {
+    flex: 1,
+  },
   page: {
     padding: spacing.page,
-    paddingBottom: 96,
-  },
-  systemHeader: {
-    minHeight: 78,
-    borderRadius: spacing.radius,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.surface,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    ...shadow,
-  },
-  systemTitle: {
-    color: colors.ink,
-    fontSize: 19,
-    fontWeight: '900',
-  },
-  systemText: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  loginState: {
-    minWidth: 76,
-    minHeight: 34,
-    borderRadius: spacing.radius,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: '#f4fafc',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loginStateActive: {
-    backgroundColor: '#e2f7fb',
-    borderColor: '#9ddce7',
-  },
-  loginStateText: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: '900',
-  },
-  loginStateTextActive: {
-    color: colors.success,
+    paddingBottom: 24,
   },
   authPanel: {
     borderRadius: spacing.radius,
@@ -431,81 +360,41 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '900',
   },
-  moduleHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  moduleHeaderText: {
-    color: colors.ink,
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  moduleHeaderMeta: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: '900',
-  },
   profileCards: {
     flexDirection: 'row',
     gap: 8,
+    marginTop: 14,
   },
   profileAction: {
     flex: 1,
-    minHeight: 76,
+    minHeight: 56,
     borderRadius: spacing.radius,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.line,
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: 8,
+    justifyContent: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  profileActionText: {
-    flex: 1,
-    minWidth: 0,
   },
   profileActionTitle: {
     color: colors.ink,
     fontSize: 14,
     fontWeight: '900',
   },
-  profileActionSubtitle: {
-    color: colors.muted,
-    fontSize: 10,
-    marginTop: 3,
-    fontWeight: '700',
-  },
-  appIntro: {
-    borderRadius: spacing.radius,
-    borderWidth: 1,
-    borderColor: '#cfe5ed',
-    backgroundColor: '#f8fdff',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginTop: 12,
-  },
-  appIntroHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
-  },
-  appIntroTitle: {
-    color: colors.ink,
-    fontSize: 14,
-    fontWeight: '900',
+  // 底部固定区域：只有文字，不加边框、不加背景色，始终贴在界面最下方
+  footer: {
+    paddingHorizontal: spacing.page,
+    paddingTop: 8,
+    paddingBottom: 10,
   },
   appIntroText: {
-    color: colors.muted,
+    color: '#8a9ca8',
     fontSize: 12,
-    lineHeight: 19,
+    lineHeight: 18,
     fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 24,
+    paddingHorizontal: 10,
   },
   profileLinks: {
     alignItems: 'center',
@@ -513,7 +402,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginTop: 18,
   },
   profileLinkText: {
     color: colors.primaryDark,
@@ -529,5 +417,6 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 12,
     fontWeight: '700',
+    marginTop: 4,
   },
 });

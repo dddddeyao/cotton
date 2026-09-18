@@ -1,10 +1,8 @@
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
-  AppState,
-  AppStateStatus,
   BackHandler,
   Platform,
   SafeAreaView,
@@ -25,72 +23,18 @@ import { SettingsScreen } from './src/screens/SettingsScreen';
 import { SimplePage } from './src/screens/SimplePage';
 import { LaunchScreen } from './src/screens/LaunchScreen';
 import { appConfig } from './src/config';
+import { cottonNews } from './src/data/newsData';
 import { api } from './src/services/api';
 import { cache } from './src/storage/cache';
 import { colors } from './src/theme';
 import { AppView, NewsItem, RecognitionResult, TabKey, UserSession } from './src/types';
 
-const NEWS_REFRESH_INTERVAL_MS = 3 * 60 * 1000;
-const NEWS_PAGE_SIZE = 10;
-const NEWS_CACHE_LIMIT = 100;
-
-function getNewsKey(item: NewsItem) {
-  return item.id || item.sourceUrl || `${item.title}-${item.date}`;
-}
-
-function getNewsTimeValue(item: NewsItem) {
-  const normalizedDate = item.date
-    .replace(/[年月.]/g, '-')
-    .replace(/日/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  const dateValue = Date.parse(normalizedDate);
-
-  if (Number.isFinite(dateValue)) {
-    return dateValue;
-  }
-
-  const idValue = Number(item.id);
-  return Number.isFinite(idValue) ? idValue : 0;
-}
-
-function sortNewsNewestFirst(items: NewsItem[]) {
-  return items
-    .map((item, index) => ({ item, index, time: getNewsTimeValue(item) }))
-    .sort((left, right) => {
-      if (left.time !== right.time) {
-        return right.time - left.time;
-      }
-
-      return left.index - right.index;
-    })
-    .map(({ item }) => item);
-}
-
-function limitNewsCache(items: NewsItem[]) {
-  return sortNewsNewestFirst(items).slice(0, NEWS_CACHE_LIMIT);
-}
-
-function mergeNewsLists(primary: NewsItem[], secondary: NewsItem[]) {
-  const seen = new Set<string>();
-  const merged: NewsItem[] = [];
-
-  for (const item of [...primary, ...secondary]) {
-    const key = getNewsKey(item);
-    if (!key || seen.has(key)) {
-      continue;
-    }
-
-    seen.add(key);
-    merged.push(item);
-  }
-
-  return limitNewsCache(merged);
-}
-
 function getErrorMessage(error: unknown) {
   return error instanceof Error && error.message ? error.message : '请检查网络后重试。';
 }
+
+// 新闻已写死在前端，列表分页由页面内部完成，不再需要向后端请求更多数据
+function noop() {}
 
 function imageUriScheme(uri: string) {
   const separatorIndex = uri.indexOf(':');
@@ -103,7 +47,7 @@ const androidTopInset =
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('news');
   const [view, setView] = useState<AppView>({ name: 'tabs' });
-  const [news, setNews] = useState<NewsItem[]>([]);
+  const [news, setNews] = useState<NewsItem[]>(cottonNews);
   const [history, setHistory] = useState<RecognitionResult[]>([]);
   const [session, setSession] = useState<UserSession | null>(null);
   const [selectedImageUri, setSelectedImageUri] = useState('');
@@ -113,100 +57,26 @@ export default function App() {
   const [isBootstrapped, setIsBootstrapped] = useState(false);
   const [isLaunchFinished, setIsLaunchFinished] = useState(false);
   const [isNewsRefreshing, setIsNewsRefreshing] = useState(false);
-  const [isNewsLoadingMore, setIsNewsLoadingMore] = useState(false);
-  const [hasMoreNews, setHasMoreNews] = useState(true);
   const [newsUpdatedAt, setNewsUpdatedAt] = useState<number | null>(null);
-  const newsRef = useRef<NewsItem[]>([]);
-  const newsPageRef = useRef(1);
-  const newsRefreshInFlightRef = useRef(false);
-  const newsLoadMoreInFlightRef = useRef(false);
-  const lastNewsRefreshAttemptRef = useRef(0);
 
-  const saveNews = useCallback((items: NewsItem[]) => {
-    const boundedItems = limitNewsCache(items);
-    newsRef.current = boundedItems;
-    setNews(boundedItems);
-    void cache.setNews(boundedItems);
-  }, []);
-
-  const refreshNews = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
-    const now = Date.now();
-
-    if (newsRefreshInFlightRef.current) {
-      return;
-    }
-
-    if (!force && now - lastNewsRefreshAttemptRef.current < NEWS_REFRESH_INTERVAL_MS) {
-      return;
-    }
-
-    newsRefreshInFlightRef.current = true;
-    lastNewsRefreshAttemptRef.current = now;
+  // 新闻写死在前端：不做网络请求、不做爬虫，刷新只是重新载入同一份固定顺序的数据
+  const refreshNews = useCallback(() => {
     setIsNewsRefreshing(true);
-
-    try {
-      const refreshedNews = await api.fetchNews({ page: 1, size: NEWS_PAGE_SIZE });
-
-      if (refreshedNews.length > 0) {
-        saveNews(mergeNewsLists(refreshedNews, newsRef.current));
-        newsPageRef.current = 1;
-      }
-
-      setHasMoreNews(refreshedNews.length >= NEWS_PAGE_SIZE);
-      setNewsUpdatedAt(Date.now());
-    } catch {
-      // Keep cached data when the configured API rejects the refresh.
-    } finally {
-      newsRefreshInFlightRef.current = false;
-      setIsNewsRefreshing(false);
-    }
-  }, [saveNews]);
-
-  const loadMoreNews = useCallback(async () => {
-    if (newsLoadMoreInFlightRef.current || newsRefreshInFlightRef.current || !hasMoreNews) {
-      return;
-    }
-
-    newsLoadMoreInFlightRef.current = true;
-    setIsNewsLoadingMore(true);
-
-    try {
-      const nextPage = newsPageRef.current + 1;
-      const nextNews = await api.fetchNews({ page: nextPage, size: NEWS_PAGE_SIZE });
-
-      if (nextNews.length > 0) {
-        saveNews(mergeNewsLists(newsRef.current, nextNews));
-        newsPageRef.current = nextPage;
-      }
-
-      setHasMoreNews(nextNews.length >= NEWS_PAGE_SIZE);
-    } catch {
-      // Keep the visible cached list if loading more fails.
-    } finally {
-      newsLoadMoreInFlightRef.current = false;
-      setIsNewsLoadingMore(false);
-    }
-  }, [hasMoreNews, saveNews]);
+    setNews(cottonNews);
+    setNewsUpdatedAt(Date.now());
+    setIsNewsRefreshing(false);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
 
     async function bootstrap() {
       try {
-        const [cachedNews, cachedHistory, cachedSession] = await Promise.all([
-          cache.getNews(),
-          cache.getHistory(),
-          cache.getSession(),
-        ]);
+        const cachedSession = await cache.getSession();
+        const cachedHistory = await cache.getHistory(cachedSession?.username);
 
         if (!isMounted) {
           return;
-        }
-
-        if (cachedNews.length > 0) {
-          saveNews(cachedNews);
-          setHasMoreNews(cachedNews.length >= NEWS_PAGE_SIZE);
-          newsPageRef.current = Math.max(1, Math.ceil(cachedNews.length / NEWS_PAGE_SIZE));
         }
 
         if (cachedHistory.length > 0) {
@@ -219,10 +89,6 @@ export default function App() {
           setIsBootstrapped(true);
         }
       }
-
-      if (isMounted) {
-        void refreshNews({ force: true });
-      }
     }
 
     bootstrap();
@@ -230,41 +96,17 @@ export default function App() {
     return () => {
       isMounted = false;
     };
-  }, [refreshNews, saveNews]);
+  }, []);
 
-  useEffect(() => {
-    if (view.name !== 'tabs' || activeTab !== 'news') {
-      return undefined;
-    }
-
-    void refreshNews();
-    const interval = setInterval(() => {
-      void refreshNews();
-    }, NEWS_REFRESH_INTERVAL_MS);
-
-    return () => clearInterval(interval);
-  }, [activeTab, refreshNews, view.name]);
-
-  useEffect(() => {
-    let previousState: AppStateStatus = AppState.currentState;
-
-    const subscription = AppState.addEventListener('change', (nextState) => {
-      const wasBackgrounded = previousState === 'background' || previousState === 'inactive';
-      const isForegrounded = nextState === 'active';
-
-      previousState = nextState;
-
-      if (wasBackgrounded && isForegrounded) {
-        void refreshNews({ force: true });
-      }
-    });
-
-    return () => subscription.remove();
-  }, [refreshNews]);
-
-  const saveHistory = useCallback((items: RecognitionResult[]) => {
+  const saveHistory = useCallback((items: RecognitionResult[], owner = session?.username ?? null) => {
     setHistory(items);
-    void cache.setHistory(items);
+    void cache.setHistory(items, owner);
+  }, [session?.username]);
+
+  const handleSessionChange = useCallback((nextSession: UserSession) => {
+    setSession(nextSession);
+    void cache.setSession(nextSession);
+    void cache.getHistory(nextSession.username).then(setHistory);
   }, []);
 
   const openTabs = useCallback(() => {
@@ -312,6 +154,7 @@ export default function App() {
       await api.logout(session.token);
       await cache.clearSession();
       setSession(null);
+      setHistory([]);
       setActiveTab('profile');
       openTabs();
       Alert.alert('已退出登录', '当前账号登录状态已清除。');
@@ -404,17 +247,10 @@ export default function App() {
     }
 
     if (view.name === 'recognitionResult') {
-      const backToHistory = view.returnTo === 'history';
-
       return (
         <RecognitionResultScreen
           result={view.result}
           onBack={() => {
-            if (backToHistory) {
-              setView({ name: 'recognitionHistory' });
-              return;
-            }
-
             setActiveTab('recognition');
             openTabs();
           }}
@@ -433,7 +269,6 @@ export default function App() {
         <RecognitionHistoryScreen
           history={history}
           onBack={openTabs}
-          onOpenResult={(result) => setView({ name: 'recognitionResult', result, returnTo: 'history' })}
           onDelete={async (ids) => {
             const remoteIds = history.filter((item) => ids.includes(item.id) && !item.isLocal).map((item) => item.id);
 
@@ -463,13 +298,9 @@ export default function App() {
           session={session}
           onBack={openTabs}
           onClearCache={async () => {
-            await cache.clearRuntimeData();
-            newsRef.current = [];
-            newsPageRef.current = 1;
-            setHasMoreNews(true);
-            setNews([]);
+            await cache.clearRuntimeData(session?.username);
             setHistory([]);
-            Alert.alert('已清理', '缓存新闻和本地临时检测记录已清理，登录状态已保留。');
+            Alert.alert('已清理', '本地临时检测记录与缓存已清理，登录状态已保留。');
           }}
           onLogout={confirmLogout}
           isLoggingOut={isLoggingOut}
@@ -500,10 +331,10 @@ export default function App() {
             news={news}
             isRefreshing={isNewsRefreshing}
             updatedAt={newsUpdatedAt}
-            isLoadingMore={isNewsLoadingMore}
-            hasMore={hasMoreNews}
-            onRefresh={() => refreshNews({ force: true })}
-            onLoadMore={loadMoreNews}
+            isLoadingMore={false}
+            hasMore={false}
+            onRefresh={refreshNews}
+            onLoadMore={noop}
             onOpenNews={(item) => setView({ name: 'newsDetail', item })}
           />
         ) : null}
@@ -520,10 +351,7 @@ export default function App() {
         {activeTab === 'profile' ? (
           <ProfileScreen
             session={session}
-            onSessionChange={(nextSession) => {
-              setSession(nextSession);
-              void cache.setSession(nextSession);
-            }}
+            onSessionChange={handleSessionChange}
             onOpenEditProfile={() => setView({ name: 'editProfile' })}
             onOpenSettings={() => setView({ name: 'settings' })}
             onOpenAgreement={(kind) => setView({ name: 'agreement', kind })}

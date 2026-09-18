@@ -13,6 +13,7 @@ import {
 type FetchNewsOptions = {
   page?: number;
   size?: number;
+  seed?: number;
 };
 
 type UploadFile = {
@@ -64,13 +65,17 @@ function createImageBase64Body(imageUri: string, imageBase64: string) {
   });
 }
 
-function createNewsPath({ page = 1, size = 10 }: FetchNewsOptions = {}) {
+function createNewsPath({ page = 1, size = 10, seed }: FetchNewsOptions = {}) {
   const backendPage = Math.max(0, page - 1);
   const query = new URLSearchParams({
     page: String(backendPage),
     size: String(size),
     keywords: '棉花,海关,检测识别',
   });
+
+  if (Number.isFinite(seed)) {
+    query.set('seed', String(seed));
+  }
   const separator = appConfig.endpoints.news.includes('?') ? '&' : '?';
 
   return `${appConfig.endpoints.news}${separator}${query.toString()}`;
@@ -189,7 +194,7 @@ export const api = {
           timeoutMs: appConfig.recognitionTimeoutMs,
         });
 
-    return normalizeRecognitionResult(payload, imageUri);
+    return normalizeRecognitionResult(payload, imageUri, { isLocal: !token });
   },
 
   async fetchHistory(token: string): Promise<RecognitionResult[]> {

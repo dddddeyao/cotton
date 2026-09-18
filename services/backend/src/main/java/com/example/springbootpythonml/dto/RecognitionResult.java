@@ -6,16 +6,15 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.LocalDateTime;
 
 /**
- * 图像识别结果 DTO（匹配 Flask 新结构 + 兼容旧字段）
+ * 图像识别结果 DTO（匹配 Flask 新结构）
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RecognitionResult {
 
     // ===== 新增：与 Flask 顶层字段对应 =====
-    @JsonAlias("cotton_area_image")
-    private String cottonAreaImage;     // data:image/png;base64,...
-    @JsonAlias("impurity_area_image")
-    private String impurityAreaImage;   // data:image/png;base64,...
+    private String grade;
+    @JsonAlias("color_feedback_image")
+    private String colorFeedbackImage;
     @JsonAlias("cotton_mask_image")
     private String cottonMaskImage;
     @JsonAlias("impurity_mask_image")
@@ -64,12 +63,12 @@ public class RecognitionResult {
     }
 
     // ===== Getter / Setter =====
-    public String getCottonAreaImage() { return cottonAreaImage; }
-    public void setCottonAreaImage(String cottonAreaImage) { this.cottonAreaImage = cottonAreaImage; }
 
-    public String getImpurityAreaImage() { return impurityAreaImage; }
-    public void setImpurityAreaImage(String impurityAreaImage) { this.impurityAreaImage = impurityAreaImage; }
+    public String getGrade() { return grade; }
+    public void setGrade(String grade) { this.grade = grade; }
 
+    public String getColorFeedbackImage() { return colorFeedbackImage; }
+    public void setColorFeedbackImage(String colorFeedbackImage) { this.colorFeedbackImage = colorFeedbackImage; }
     public String getCottonMaskImage() { return cottonMaskImage; }
     public void setCottonMaskImage(String cottonMaskImage) { this.cottonMaskImage = cottonMaskImage; }
 
@@ -121,8 +120,6 @@ public class RecognitionResult {
     @Override
     public String toString() {
         return "RecognitionResult{" +
-                "cottonAreaImage(len)=" + (cottonAreaImage == null ? 0 : cottonAreaImage.length()) +
-                ", impurityAreaImage(len)=" + (impurityAreaImage == null ? 0 : impurityAreaImage.length()) +
                 ", cottonMaskImage(len)=" + (cottonMaskImage == null ? 0 : cottonMaskImage.length()) +
                 ", impurityMaskImage(len)=" + (impurityMaskImage == null ? 0 : impurityMaskImage.length()) +
                 ", cottonOverlayImage(len)=" + (cottonOverlayImage == null ? 0 : cottonOverlayImage.length()) +

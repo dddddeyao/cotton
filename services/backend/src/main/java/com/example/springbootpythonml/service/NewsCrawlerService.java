@@ -7,7 +7,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -58,13 +57,16 @@ public class NewsCrawlerService {
     private static final int MAX_CONTENT_LENGTH = 6000;
     private static final int MAX_SUMMARY_LENGTH = 220;
     private static final int MAX_ARTICLE_HTML_SCAN_LENGTH = 150000;
-    private static final List<String> COTTON_SIGNAL_KEYWORDS = List.of(
-            "棉花", "棉", "原棉", "皮棉", "籽棉", "进口棉", "新疆棉", "疆棉", "郑棉", "美棉",
-            "棉价", "棉市", "棉纱", "棉纺", "棉农", "棉企", "纺企", "纺织",
-            "棉花检验", "纤维检验", "cotton");
     private static final List<String> NON_DISPLAY_NEWS_IMAGE_MARKERS = List.of(
-            "placeholder", "default", "news-default", "no-image", "cotton-news-placeholder",
-            "/logo.", "/logo_", "/images_new/logo", "/topimgs/", "/banner.", "banner.jpg", "banner.png");
+            "placeholder", "default", "news-default", "no-image", "noimage", "no_pic", "nopic", "notfound",
+            "cotton-news-placeholder", "source-cotton-logo", "site-logo", "website-logo", "web-logo",
+            "cntac_logo", "cntac-logo", "cqn_logo", "cqn-logo",
+            "c11c413cc8eccf9e82c40477592558ab", "c9e9e554634e5b4be8b16a0d34395b52",
+            "d4a811ad94ec7a9a80a76ee3bed0e157",
+            "201508201641002466553", "201508201625068547638", "5a681a7949560", "show_qrcode", "uk.gif", "rawmex.cn", "images/2013", "upload/201508", "news_new/fzw",
+            "/logo.", "/logo_", "/logo/", "/logos/", "/images_new/logo",
+            "/topimgs/", "/topimg/", "/banner.", "/banner/", "/banners/",
+            "banner.jpg", "banner.png", "banner.jpeg", "banner.webp", "/ad.", "/ads/");
 
     private final NewsRepository newsRepository;
     private final NewsCrawlerProperties properties;
@@ -77,23 +79,12 @@ public class NewsCrawlerService {
         this.properties = properties;
     }
 
-    @Scheduled(
-            initialDelayString = "${app.news.crawler.initial-delay-ms:60000}",
-            fixedDelayString = "${app.news.crawler.fixed-delay-ms:86400000}")
-    public void refreshScheduled() {
-        if (!properties.isEnabled()) {
-            return;
-        }
-
-        try {
-            int inserted = refreshAllSources();
-            log.info("news crawler finished, insertedOrUpdated={}", inserted);
-        } catch (RuntimeException e) {
-            log.warn("news crawler failed: {}", e.getMessage());
-        }
-    }
+    // 新闻已改为写死在 App 前端，后端不再定时爬取。
+    // refreshAllSources() 仅保留为可手动调用的工具方法，不会被自动触发。
 
     public int refreshAllSources() {
+        pruneNonDisplayNews();
+
         int changed = 0;
         int dailyLimit = remainingDailyItemLimit();
         int refreshLimit = Math.min(Math.max(1, properties.getMaxItemsPerRefresh()), dailyLimit);
@@ -133,6 +124,18 @@ public class NewsCrawlerService {
 
         trimStoredNews();
         return changed;
+    }
+
+    private void pruneNonDisplayNews() {
+        List<News> nonDisplayNews = newsRepository.findAll().stream()
+                .filter(news -> !NewsKeywordPolicy.isDisplayable(news))
+                .toList();
+        if (nonDisplayNews.isEmpty()) {
+            return;
+        }
+
+        newsRepository.deleteAll(nonDisplayNews);
+        log.info("news keyword policy removed non cotton-customs items, deleted={}", nonDisplayNews.size());
     }
 
     private boolean isEnabledSource(NewsCrawlerProperties.Source source) {
@@ -375,11 +378,6 @@ public class NewsCrawlerService {
             return Optional.empty();
         }
 
-        String feedHaystack = title + " " + summary + " " + content;
-        if (!passesStrictFilter(feedHaystack)) {
-            return Optional.empty();
-        }
-
         String articleHtml = "";
         if (properties.isFetchArticleContent() || isBlank(imageUrl)) {
             articleHtml = fetchArticleHtml(link);
@@ -419,7 +417,7 @@ public class NewsCrawlerService {
         }
 
         String haystack = title + " " + summary + " " + content;
-        if (!passesStrictFilter(haystack)) {
+        if (!passesStrictFilter(haystack, date, linkCandidate.url())) {
             return Optional.empty();
         }
 
@@ -428,13 +426,17 @@ public class NewsCrawlerService {
 
     private Optional<News> toNews(NewsCrawlerProperties.Source source, String title, String summary, String content,
                                   String date, String link, String imageUrl) {
+        String haystack = title + " " + summary + " " + content;
+        if (!passesStrictFilter(haystack, date, link)) {
+            return Optional.empty();
+        }
+
         String localImageUrl = localizeImageUrl(imageUrl, link);
         if (properties.isRequireImage() && isBlank(localImageUrl)) {
             return Optional.empty();
         }
 
-        String language = normalizedLanguage(source.getLanguage(), title + " " + summary + " " + content);
-        String haystack = title + " " + summary + " " + content;
+        String language = normalizedLanguage(source.getLanguage(), haystack);
         News news = new News();
         news.setTitle(title);
         news.setSummary(summary);
@@ -449,7 +451,6 @@ public class NewsCrawlerService {
         news.setCrawledAt(LocalDateTime.now());
         return Optional.of(news);
     }
-
     private String normalizedLanguage(String configured, String text) {
         if (!isBlank(configured)) {
             return configured.toLowerCase(Locale.ROOT).startsWith("zh") ? "zh" : configured.toLowerCase(Locale.ROOT);
@@ -494,13 +495,17 @@ public class NewsCrawlerService {
         newsRepository.save(news);
     }
 
-    private boolean passesStrictFilter(String text) {
+    private boolean passesStrictFilter(String text, String date, String link) {
         String normalized = text.toLowerCase(Locale.ROOT);
-        if (!containsAnyKeyword(normalized, COTTON_SIGNAL_KEYWORDS)) {
+        if (!NewsKeywordPolicy.hasRequiredKeywords(normalized)) {
             return false;
         }
 
-        boolean included = containsAnyKeyword(normalized, properties.getIncludeKeywords());
+        if (!NewsKeywordPolicy.isPublishedInScope(date, link)) {
+            return false;
+        }
+
+        boolean included = containsAnyKeyword(normalized, NewsKeywordPolicy.keywordVocabulary(properties.getIncludeKeywords()));
         if (!included) {
             return false;
         }
@@ -510,7 +515,6 @@ public class NewsCrawlerService {
                 .map(keyword -> keyword.toLowerCase(Locale.ROOT))
                 .noneMatch(normalized::contains);
     }
-
     private boolean containsAnyKeyword(String normalizedText, List<String> keywords) {
         return keywords.stream()
                 .filter(keyword -> !isBlank(keyword))
@@ -521,7 +525,7 @@ public class NewsCrawlerService {
     private String matchedKeywords(String text) {
         String normalized = text.toLowerCase(Locale.ROOT);
         List<String> hits = new ArrayList<>();
-        for (String keyword : properties.getIncludeKeywords()) {
+        for (String keyword : NewsKeywordPolicy.keywordVocabulary(properties.getIncludeKeywords())) {
             if (!isBlank(keyword) && normalized.contains(keyword.toLowerCase(Locale.ROOT))) {
                 hits.add(keyword);
             }
@@ -805,7 +809,7 @@ public class NewsCrawlerService {
             }
 
             byte[] body = response.body();
-            if (body.length == 0) {
+            if (body.length == 0 || !isDisplayableNewsImage(body)) {
                 return "";
             }
 
@@ -814,6 +818,9 @@ public class NewsCrawlerService {
             Files.createDirectories(directory);
 
             String filename = sha256(absoluteUrl) + extensionFrom(contentType, absoluteUrl);
+            if (isNonDisplayNewsImageUrl(filename)) {
+                return "";
+            }
             Path target = directory.resolve(filename).normalize();
             if (!target.startsWith(directory)) {
                 throw new IllegalStateException("invalid image target path");
@@ -827,6 +834,27 @@ public class NewsCrawlerService {
             return "";
         }
     }
+
+    private boolean isDisplayableNewsImage(byte[] body) {
+        try {
+            java.awt.image.BufferedImage image = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(body));
+            if (image == null) {
+                return false;
+            }
+
+            int width = image.getWidth();
+            int height = image.getHeight();
+            if (width < 260 || height < 120) {
+                return false;
+            }
+
+            double ratio = (double) width / (double) height;
+            return ratio >= 0.7 && ratio <= 4.2;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private String safeImageDirectory() {
         String value = properties.getImageDirectory();
         if (isBlank(value)) {
@@ -983,4 +1011,5 @@ public class NewsCrawlerService {
 
     private record LinkCandidate(String title, String url) {}
 }
+
 

@@ -17,8 +17,7 @@ public class RecognitionHistoryItem {
     private DetectionResult detectionResult;
     private String label;
     private String filename;
-    private String cottonAreaImage;
-    private String impurityAreaImage;
+    private String colorFeedbackImage;
     private String cottonMaskImage;
     private String impurityMaskImage;
     private String cottonOverlayImage;
@@ -40,8 +39,7 @@ public class RecognitionHistoryItem {
         item.setConfidence(record.getConfidence());
         item.setLabel(record.getColorGrade() == null ? null : String.valueOf(record.getColorGrade()));
         item.setFilename(null);
-        item.setCottonAreaImage(record.getCottonAreaImage());
-        item.setImpurityAreaImage(record.getImpurityAreaImage());
+        item.setColorFeedbackImage(record.getColorFeedbackImage());
         item.setCottonMaskImage(record.getCottonMaskImage());
         item.setImpurityMaskImage(record.getImpurityMaskImage());
         item.setCottonOverlayImage(record.getCottonOverlayImage());
@@ -95,11 +93,8 @@ public class RecognitionHistoryItem {
     public String getFilename() { return filename; }
     public void setFilename(String filename) { this.filename = filename; }
 
-    public String getCottonAreaImage() { return cottonAreaImage; }
-    public void setCottonAreaImage(String cottonAreaImage) { this.cottonAreaImage = cottonAreaImage; }
-
-    public String getImpurityAreaImage() { return impurityAreaImage; }
-    public void setImpurityAreaImage(String impurityAreaImage) { this.impurityAreaImage = impurityAreaImage; }
+    public String getColorFeedbackImage() { return colorFeedbackImage; }
+    public void setColorFeedbackImage(String colorFeedbackImage) { this.colorFeedbackImage = colorFeedbackImage; }
 
     public String getCottonMaskImage() { return cottonMaskImage; }
     public void setCottonMaskImage(String cottonMaskImage) { this.cottonMaskImage = cottonMaskImage; }

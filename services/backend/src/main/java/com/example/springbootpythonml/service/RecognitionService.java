@@ -89,14 +89,19 @@ public class RecognitionService {
             if (result.getConfidence() == null && result.getDetectionResult().getConfidence() != null) {
                 result.setConfidence(result.getDetectionResult().getConfidence().floatValue());
             }
+            if (result.getGrade() == null
+                    && result.getDetectionResult().getColorGrade() != null
+                    && result.getDetectionResult().getImpurityGrade() != null) {
+                result.setGrade(result.getDetectionResult().getColorGrade()
+                        + " / " + result.getDetectionResult().getImpurityGrade());
+            }
         }
 
         if (userId != null && result.getDetectionResult() != null) {
             RecognitionRecord record = new RecognitionRecord();
             record.setUserId(userId);
             record.setImageUri(storedImageUri);
-            record.setCottonAreaImage(result.getCottonAreaImage());
-            record.setImpurityAreaImage(result.getImpurityAreaImage());
+            record.setColorFeedbackImage(result.getColorFeedbackImage());
             record.setCottonMaskImage(result.getCottonMaskImage());
             record.setImpurityMaskImage(result.getImpurityMaskImage());
             record.setCottonOverlayImage(result.getCottonOverlayImage());

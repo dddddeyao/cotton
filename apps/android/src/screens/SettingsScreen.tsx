@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Alert, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { SettingsRow, StackPage } from '../components/common';
 import { api } from '../services/api';
 import { colors, spacing } from '../theme';
 import { UserSession } from '../types';
+import { getAndroidBottomInset } from '../utils/safeArea';
 
-const androidBottomInset = Platform.OS === 'android' ? 34 : 0;
 
 export function SettingsScreen({
   session,
@@ -23,6 +23,8 @@ export function SettingsScreen({
 }) {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const { height } = useWindowDimensions();
+  const bottomInset = getAndroidBottomInset(height);
   const [passwordForm, setPasswordForm] = useState({
     oldPassword: '',
     newPassword: '',
@@ -65,7 +67,7 @@ export function SettingsScreen({
 
   return (
     <StackPage title="应用设置" onBack={onBack}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scroll} contentContainerStyle={[styles.page, { paddingBottom: spacing.page + bottomInset }]} showsVerticalScrollIndicator={false}>
 
         <SettingsRow
           title={isChangingPassword ? '正在提交...' : '修改密码'}
@@ -126,7 +128,6 @@ const styles = StyleSheet.create({
   page: {
     flexGrow: 1,
     padding: spacing.page,
-    paddingBottom: spacing.page + androidBottomInset,
     backgroundColor: colors.background,
   },
 

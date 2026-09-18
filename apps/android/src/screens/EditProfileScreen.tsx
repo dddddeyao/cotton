@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { EmptyState, PrimaryButton, StackPage } from '../components/common';
 import { api } from '../services/api';
 import { colors, shadow, spacing } from '../theme';
 import { UserProfile, UserSession } from '../types';
+import { getAndroidBottomInset } from '../utils/safeArea';
 
-const androidBottomInset = Platform.OS === 'android' ? 34 : 0;
 
 type ProfileForm = Omit<UserProfile, 'username'>;
 
@@ -34,6 +34,8 @@ export function EditProfileScreen({
   const [profile, setProfile] = useState<ProfileState>({ data: defaultProfile });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const { height } = useWindowDimensions();
+  const bottomInset = getAndroidBottomInset(height);
 
   useEffect(() => {
     if (!session) {
@@ -111,7 +113,7 @@ export function EditProfileScreen({
 
   return (
     <StackPage title="编辑资料" onBack={onBack}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scroll} contentContainerStyle={[styles.page, { paddingBottom: spacing.page + bottomInset }]} showsVerticalScrollIndicator={false}>
         {session ? (
           <View style={styles.formPanel}>
             <View style={styles.formHeader}>
@@ -187,7 +189,6 @@ const styles = StyleSheet.create({
   page: {
     flexGrow: 1,
     padding: spacing.page,
-    paddingBottom: spacing.page + androidBottomInset,
     backgroundColor: colors.background,
   },
   formPanel: {

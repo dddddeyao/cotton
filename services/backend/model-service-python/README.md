@@ -52,11 +52,15 @@ IMPURITY_THRESH
 `detectionResult` 包含颜色等级、杂质等级、棉花区域占比、杂质面积、面积比和置信度。图像字段如下：
 
 ```text
-cottonMaskImage
-impurityMaskImage
-cottonOverlayImage
-impurityOverlayImage
-blackBackgroundImpurityOverlay
+cottonMaskImage                棉花区域：原图叠加半透明红色掩膜，红色处即棉花
+impurityMaskImage              杂质区域：黑底白斑，白色处即识别到的杂质
+cottonOverlayImage             棉区叠加（同棉花区域）
+impurityOverlayImage           杂质叠加（原图 + 半透明红色）
+blackBackgroundImpurityOverlay 黑底保留棉花并标出杂质
 ```
+
+`cottonMaskImage` 是**原始图片 + 半透明红色掩膜**的合成结果：红色覆盖处即模型识别出的棉花区域，底图仍清晰可见；尺寸、比例、视角、构图与上传的原图完全一致，不裁剪、不重新生成图像、不添加任何标注。
+
+`impurityMaskImage` 是**黑底白斑的二值掩膜**：白色处即模型识别出的杂质区域，边缘按实际轮廓，不是矩形框。
 
 为兼容旧调用，服务仍会返回 `cottonAreaImage` 和 `impurityAreaImage`，新前端和新后端逻辑应优先使用上面的五个字段。

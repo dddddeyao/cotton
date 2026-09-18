@@ -275,8 +275,7 @@ class SpringbootPythonMlApplicationTests {
                 .andExpect(jsonPath("$.data.length()").value(1))
                 .andExpect(jsonPath("$.data[0].id").value(ownerRecord.getId()))
                 .andExpect(jsonPath("$.data[0].imageUri").value("owner.jpg"))
-                .andExpect(jsonPath("$.data[0].cottonAreaImage").value("data:image/jpeg;base64,cotton-1"))
-                .andExpect(jsonPath("$.data[0].impurityAreaImage").value("data:image/png;base64,impurity-1"))
+                .andExpect(jsonPath("$.data[0].colorFeedbackImage").value("data:image/png;base64,color-feedback-1"))
                 .andExpect(jsonPath("$.data[0].cottonMaskImage").value("data:image/png;base64,cotton-mask-1"))
                 .andExpect(jsonPath("$.data[0].impurityMaskImage").value("data:image/png;base64,impurity-mask-1"))
                 .andExpect(jsonPath("$.data[0].cottonOverlayImage").value("data:image/png;base64,cotton-overlay-1"))
@@ -338,7 +337,8 @@ class SpringbootPythonMlApplicationTests {
         server.expect(requestTo("http://127.0.0.1:5000/predict?images=1"))
                 .andRespond(withStatus(HttpStatus.OK)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .body("{\"cottonMaskImage\":\"data:image/png;base64,cotton-mask\"," +
+                        .body("{\"grade\":\"3 / 2\",\"colorFeedbackImage\":\"data:image/jpeg;base64,color-feedback\"," +
+                                "\"cottonMaskImage\":\"data:image/png;base64,cotton-mask\"," +
                                 "\"impurityMaskImage\":\"data:image/png;base64,impurity-mask\"," +
                                 "\"cottonOverlayImage\":\"data:image/png;base64,cotton-overlay\"," +
                                 "\"impurityOverlayImage\":\"data:image/png;base64,impurity-overlay\"," +
@@ -356,38 +356,36 @@ class SpringbootPythonMlApplicationTests {
 
         RecognitionResult result = recognitionService.recognize(file, true, user.getId());
 
+        assertThat(result.getGrade()).isEqualTo("3 / 2");
+        assertThat(result.getColorFeedbackImage()).isEqualTo("data:image/jpeg;base64,color-feedback");
         assertThat(result.getCottonMaskImage()).isEqualTo("data:image/png;base64,cotton-mask");
         assertThat(result.getImpurityMaskImage()).isEqualTo("data:image/png;base64,impurity-mask");
         assertThat(result.getCottonOverlayImage()).isEqualTo("data:image/png;base64,cotton-overlay");
         assertThat(result.getImpurityOverlayImage()).isEqualTo("data:image/png;base64,impurity-overlay");
         assertThat(result.getBlackBackgroundImpurityOverlay())
                 .isEqualTo("data:image/png;base64,black-impurity-overlay");
-        assertThat(result.getCottonAreaImage()).isNull();
-        assertThat(result.getImpurityAreaImage()).isNull();
         assertThat(result.getConclusion()).isNull();
         assertThat(result.getLabel()).isEqualTo("3");
         assertThat(result.getConfidence()).isEqualTo(0.96f);
 
         RecognitionRecord record = recordRepository.findByUserIdOrderByCreatedAtDesc(user.getId()).get(0);
+        assertThat(record.getColorFeedbackImage()).isEqualTo("data:image/jpeg;base64,color-feedback");
         assertThat(record.getCottonMaskImage()).isEqualTo("data:image/png;base64,cotton-mask");
         assertThat(record.getImpurityMaskImage()).isEqualTo("data:image/png;base64,impurity-mask");
         assertThat(record.getCottonOverlayImage()).isEqualTo("data:image/png;base64,cotton-overlay");
         assertThat(record.getImpurityOverlayImage()).isEqualTo("data:image/png;base64,impurity-overlay");
         assertThat(record.getBlackBackgroundImpurityOverlay())
                 .isEqualTo("data:image/png;base64,black-impurity-overlay");
-        assertThat(record.getCottonAreaImage()).isNull();
-        assertThat(record.getImpurityAreaImage()).isNull();
         assertThat(record.getConclusion()).isNull();
 
         RecognitionHistoryItem historyItem = recognitionService.getHistory(user.getId()).get(0);
+        assertThat(historyItem.getColorFeedbackImage()).isEqualTo("data:image/jpeg;base64,color-feedback");
         assertThat(historyItem.getCottonMaskImage()).isEqualTo("data:image/png;base64,cotton-mask");
         assertThat(historyItem.getImpurityMaskImage()).isEqualTo("data:image/png;base64,impurity-mask");
         assertThat(historyItem.getCottonOverlayImage()).isEqualTo("data:image/png;base64,cotton-overlay");
         assertThat(historyItem.getImpurityOverlayImage()).isEqualTo("data:image/png;base64,impurity-overlay");
         assertThat(historyItem.getBlackBackgroundImpurityOverlay())
                 .isEqualTo("data:image/png;base64,black-impurity-overlay");
-        assertThat(historyItem.getCottonAreaImage()).isNull();
-        assertThat(historyItem.getImpurityAreaImage()).isNull();
         assertThat(historyItem.getConclusion()).isNull();
         server.verify();
     }
@@ -416,8 +414,7 @@ class SpringbootPythonMlApplicationTests {
     @Test
     void recognitionResultMapsNewImageFieldsAndAliases() throws Exception {
         RecognitionResult result = objectMapper.readValue(
-                "{\"cotton_area_image\":\"snake-cotton-area\"," +
-                        "\"impurity_area_image\":\"snake-impurity-area\"," +
+                "{\"grade\":\"61 / 6\",\"color_feedback_image\":\"snake-color-feedback\"," +
                         "\"cottonMaskImage\":\"camel-cotton-mask\"," +
                         "\"impurity_mask_image\":\"snake-impurity-mask\"," +
                         "\"cotton_overlay_image\":\"snake-cotton-overlay\"," +
@@ -428,8 +425,8 @@ class SpringbootPythonMlApplicationTests {
                         "\"confidence\":0.91}}",
                 RecognitionResult.class);
 
-        assertThat(result.getCottonAreaImage()).isEqualTo("snake-cotton-area");
-        assertThat(result.getImpurityAreaImage()).isEqualTo("snake-impurity-area");
+        assertThat(result.getGrade()).isEqualTo("61 / 6");
+        assertThat(result.getColorFeedbackImage()).isEqualTo("snake-color-feedback");
         assertThat(result.getCottonMaskImage()).isEqualTo("camel-cotton-mask");
         assertThat(result.getImpurityMaskImage()).isEqualTo("snake-impurity-mask");
         assertThat(result.getCottonOverlayImage()).isEqualTo("snake-cotton-overlay");
@@ -486,8 +483,7 @@ class SpringbootPythonMlApplicationTests {
         RecognitionRecord record = new RecognitionRecord();
         record.setUserId(userId);
         record.setImageUri(imageUri);
-        record.setCottonAreaImage("data:image/jpeg;base64,cotton-" + colorGrade);
-        record.setImpurityAreaImage("data:image/png;base64,impurity-" + colorGrade);
+        record.setColorFeedbackImage("data:image/png;base64,color-feedback-" + colorGrade);
         record.setCottonMaskImage("data:image/png;base64,cotton-mask-" + colorGrade);
         record.setImpurityMaskImage("data:image/png;base64,impurity-mask-" + colorGrade);
         record.setCottonOverlayImage("data:image/png;base64,cotton-overlay-" + colorGrade);

@@ -1,16 +1,20 @@
-﻿import { appConfig } from '../config';
+import { appConfig } from '../config';
 import { DetectionResult, NewsItem, RecognitionMetric, RecognitionResult, UserProfile, UserSession } from '../types';
 import { hasRealNewsImage } from './newsImages';
+import { filterCottonCustomsNews } from './newsPolicy';
 
 type AnyRecord = Record<string, unknown>;
+
+const missingResultMarker = '\u672a\u8fd4\u56de';
 
 function isRecord(value: unknown): value is AnyRecord {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 function stringValue(value: unknown, fallback = '') {
-  if (typeof value === 'string' && value.trim()) {
-    return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed && !trimmed.includes(missingResultMarker) ? trimmed : fallback;
   }
 
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -39,19 +43,6 @@ function pickField(raw: AnyRecord, ...keys: string[]) {
   }
 
   return undefined;
-}
-
-function numberValue(value: unknown, fallback = 0) {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === 'string' && value.trim()) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : fallback;
-  }
-
-  return fallback;
 }
 
 function nullableNumber(value: unknown): number | null {
@@ -117,37 +108,22 @@ function normalizeMetric(item: unknown): RecognitionMetric | null {
   };
 }
 
-function displayValue(value: unknown, suffix = '') {
-  if (value === null || value === undefined || value === '') {
-    return '未返回';
-  }
-
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return `${Number.isInteger(value) ? value : Number(value.toFixed(6))}${suffix}`;
-  }
-
-  return `${String(value)}${suffix}`;
+function formatNumber(value: number, suffix = '') {
+  return `${Number.isInteger(value) ? value : Number(value.toFixed(6))}${suffix}`;
 }
 
-function displayPercentRatio(value: unknown) {
-  const parsed = nullableNumber(value);
-  if (parsed === null) {
-    return '未返回';
-  }
-
-  return `${Number((parsed * 100).toFixed(4))}%`;
+function formatPercentRatio(value: number) {
+  return `${Number((value * 100).toFixed(4))}%`;
 }
 
-function displayConfidence(value: unknown) {
-  const parsed = nullableNumber(value);
-  if (parsed === null) {
-    return '未返回';
-  }
-
-  const normalized = parsed > 1 ? parsed / 100 : parsed;
+function formatConfidence(value: number) {
+  const normalized = value > 1 ? value / 100 : value;
   return `${Math.round(Math.max(0, Math.min(1, normalized)) * 10000) / 100}%`;
 }
 
+function metricFromNumber(label: string, value: number | null, hint: string, suffix = ''): RecognitionMetric | null {
+  return value === null ? null : { label, value: formatNumber(value, suffix), hint };
+}
 
 function normalizeDetectionResult(raw: AnyRecord): DetectionResult {
   return {
@@ -162,15 +138,14 @@ function normalizeDetectionResult(raw: AnyRecord): DetectionResult {
 
 function buildModelMetrics(detection: DetectionResult): RecognitionMetric[] {
   return [
-    { label: '颜色等级', value: displayValue(detection.colorGrade), hint: 'colorGrade' },
-    { label: '杂质等级', value: displayValue(detection.impurityGrade), hint: 'impurityGrade' },
-    { label: '棉花区域占比', value: displayValue(detection.cottonArea, '%'), hint: 'cottonArea' },
-    { label: '杂质面积', value: displayValue(detection.impurityArea, ' px'), hint: 'impurityArea' },
-    { label: '杂质面积比', value: displayPercentRatio(detection.areaRatio), hint: 'areaRatio' },
-    { label: '模型置信度', value: displayConfidence(detection.confidence), hint: 'confidence' },
-  ];
+    metricFromNumber('颜色等级', detection.colorGrade, 'colorGrade'),
+    metricFromNumber('杂质等级', detection.impurityGrade, 'impurityGrade'),
+    metricFromNumber('棉花区域占比', detection.cottonArea, 'cottonArea', '%'),
+    metricFromNumber('杂质面积', detection.impurityArea, 'impurityArea'),
+    detection.areaRatio === null ? null : { label: '杂质面积比', value: formatPercentRatio(detection.areaRatio), hint: 'areaRatio' },
+    detection.confidence === null ? null : { label: '模型置信度', value: formatConfidence(detection.confidence), hint: 'confidence' },
+  ].filter((metric): metric is RecognitionMetric => Boolean(metric));
 }
-
 
 function buildMetrics(raw: AnyRecord, detection: DetectionResult): RecognitionMetric[] {
   const rawMetrics = raw.metrics ?? raw.parameters ?? raw.items;
@@ -220,8 +195,16 @@ export function normalizeNewsList(payload: unknown): NewsItem[] {
                       : Array.isArray(nestedResult.items)
                         ? nestedResult.items
                         : [];
+  const imageUrlCounts = new Map<string, number>();
+  list.forEach((item) => {
+    const record = isRecord(item) ? item : {};
+    const resolvedImageUrl = resolveImageUri(stringValue(record.imageUrl ?? record.coverImage ?? record.thumbnail ?? record.image));
+    if (hasRealNewsImage(resolvedImageUrl)) {
+      imageUrlCounts.set(resolvedImageUrl, (imageUrlCounts.get(resolvedImageUrl) ?? 0) + 1);
+    }
+  });
 
-  return list
+  const news = list
     .map((item, index) => {
       const record = isRecord(item) ? item : {};
       const title = stringValue(record.title ?? record.newsTitle);
@@ -232,7 +215,7 @@ export function normalizeNewsList(payload: unknown): NewsItem[] {
       const summary = stringValue(record.summary ?? record.description ?? record.content);
       const content = stringValue(record.content ?? record.body ?? record.detail, summary);
       const resolvedImageUrl = resolveImageUri(stringValue(record.imageUrl ?? record.coverImage ?? record.thumbnail ?? record.image));
-      const imageUrl = hasRealNewsImage(resolvedImageUrl) ? resolvedImageUrl : '';
+      const imageUrl = hasRealNewsImage(resolvedImageUrl) && (imageUrlCounts.get(resolvedImageUrl) ?? 0) <= 2 ? resolvedImageUrl : '';
       const sourceUrl = resolveImageUri(stringValue(record.sourceUrl ?? record.url ?? record.link));
 
       return {
@@ -240,7 +223,7 @@ export function normalizeNewsList(payload: unknown): NewsItem[] {
         title,
         summary,
         content,
-        date: stringValue(record.date ?? record.publishDate ?? record.createdAt ?? record.crawledAt, ''),
+        date: stringValue(record.date || record.publishDate || record.createdAt || record.crawledAt, ''),
         source: stringValue(record.source ?? record.origin),
         sourceUrl,
         imageUrl,
@@ -250,7 +233,10 @@ export function normalizeNewsList(payload: unknown): NewsItem[] {
       };
     })
     .filter((item): item is NewsItem => Boolean(item));
+
+  return filterCottonCustomsNews(news);
 }
+
 export function normalizeSession(payload: unknown, fallbackUsername: string): UserSession {
   const record = isRecord(payload) ? payload : {};
   const nestedUser = isRecord(record.user) ? record.user : {};
@@ -261,7 +247,11 @@ export function normalizeSession(payload: unknown, fallbackUsername: string): Us
   };
 }
 
-export function normalizeRecognitionResult(payload: unknown, imageUri: string): RecognitionResult {
+export function normalizeRecognitionResult(
+  payload: unknown,
+  imageUri: string,
+  options: { isLocal?: boolean } = {},
+): RecognitionResult {
   const raw = pickRecognitionPayload(payload);
   const detectionResult = normalizeDetectionResult(raw);
   const metrics = buildMetrics(raw, detectionResult);
@@ -276,11 +266,12 @@ export function normalizeRecognitionResult(payload: unknown, imageUri: string): 
     id: stringValue(pickField(raw, 'id', 'recordId', 'record_id'), timestamp || resolvedImageUri),
     imageUri: resolvedImageUri,
     createdAt,
-    grade: grade || '未返回',
+    grade,
     confidence: normalizeConfidence(raw.confidence ?? raw.score ?? raw.probability ?? detectionResult.confidence),
     label: stringValue(raw.label, colorGrade),
     timestamp,
     filename: stringValue(raw.filename),
+    colorFeedbackImage: nullableImageUri(pickField(raw, 'colorFeedbackImage', 'color_feedback_image')),
     cottonMaskImage: nullableImageUri(pickField(raw, 'cottonMaskImage', 'cotton_mask_image')),
     impurityMaskImage: nullableImageUri(pickField(raw, 'impurityMaskImage', 'impurity_mask_image')),
     cottonOverlayImage: nullableImageUri(pickField(raw, 'cottonOverlayImage', 'cotton_overlay_image')),
@@ -288,12 +279,10 @@ export function normalizeRecognitionResult(payload: unknown, imageUri: string): 
     blackBackgroundImpurityOverlay: nullableImageUri(
       pickField(raw, 'blackBackgroundImpurityOverlay', 'black_background_impurity_overlay'),
     ),
-    cottonAreaImage: nullableImageUri(pickField(raw, 'cottonAreaImage', 'cotton_area_image')),
-    impurityAreaImage: nullableImageUri(pickField(raw, 'impurityAreaImage', 'impurity_area_image')),
     detectionResult,
     metrics,
     conclusion: stringValue(raw.conclusion ?? raw.message ?? raw.remark),
-    isLocal: false,
+    isLocal: options.isLocal ?? false,
   };
 }
 
@@ -313,7 +302,7 @@ export function normalizeRecognitionHistory(payload: unknown): RecognitionResult
 
   return list.map((item, index) => {
     const imageUri = isRecord(item) ? stringValue(pickField(item, 'imageUri', 'image_uri', 'imageUrl', 'url')) : '';
-    const result = normalizeRecognitionResult(item, imageUri);
+    const result = normalizeRecognitionResult(item, imageUri, { isLocal: false });
     return {
       ...result,
       id: result.id || `history-${index + 1}`,
@@ -332,3 +321,5 @@ export function normalizeProfile(payload: unknown, username: string): UserProfil
     role: stringValue(record.role ?? record.identity),
   };
 }
+
+

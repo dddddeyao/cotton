@@ -6,6 +6,7 @@ import { StackPage } from '../components/common';
 import { hasRealNewsImage } from '../services/newsImages';
 import { colors, shadow, spacing } from '../theme';
 import { NewsItem } from '../types';
+import { formatDate } from '../utils/format';
 
 export function NewsDetailScreen({ item, onBack }: { item: NewsItem; onBack: () => void }) {
   const body = item.content || item.summary;
@@ -20,11 +21,8 @@ export function NewsDetailScreen({ item, onBack }: { item: NewsItem; onBack: () 
             <Image source={{ uri: item.imageUrl }} style={styles.heroImage} onError={() => setImageFailed(true)} />
           ) : null}
           <View style={styles.heroBody}>
-            <View style={styles.metaRow}>
-              <Text style={styles.category}>{item.category || '分类未返回'}</Text>
-              <Text style={styles.date}>{item.date}</Text>
-            </View>
             <Text style={styles.title}>{item.title}</Text>
+            <Text style={styles.date}>{formatDate(item.date)}</Text>
             <Text style={styles.summary}>{item.summary || '摘要未返回'}</Text>
           </View>
         </View>
@@ -83,27 +81,11 @@ const styles = StyleSheet.create({
   heroBody: {
     padding: 14,
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-    gap: 12,
-  },
-  category: {
-    color: colors.primaryDark,
-    fontSize: 11,
-    fontWeight: '900',
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.primarySoft,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
   date: {
     color: colors.muted,
     fontSize: 12,
     fontWeight: '700',
+    marginTop: 8,
   },
   title: {
     color: colors.ink,

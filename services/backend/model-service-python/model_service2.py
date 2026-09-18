@@ -21,7 +21,7 @@ import cv2
 import numpy as np
 import torch
 import torchvision.transforms as T
-from PIL import Image
+from PIL import Image, ImageDraw
 from torch import nn
 from torchvision import models
 
@@ -30,6 +30,12 @@ try:
 except Exception:
     from .unet import UNet
 
+try:
+    from scipy import ndimage
+    from scipy.ndimage import binary_closing
+except Exception:
+    ndimage = None
+    binary_closing = None
 
 app = Flask(__name__)
 
@@ -89,12 +95,13 @@ def parse_int_labels(raw: str) -> list[int]:
 COLOR_MODEL_PATH = resolve_model_path("COLOR_MODEL_PATH", "fourtime-best.pth")
 COLOR_RESIZE_SIZE = env_int("COLOR_RESIZE_SIZE", 320)
 COLOR_IMG_SIZE = env_int("COLOR_IMG_SIZE", 224)
+# 颜色等级代码与 App「分类标准」页的颜色等级参数表一致（一级11 ~ 七级71）。
 COLOR_GRADE_LABELS = parse_int_labels(os.getenv("COLOR_GRADE_LABELS", "11,21,31,41,51,61,71"))
 
 COTTON_UNET_WEIGHTS = resolve_model_path("COTTON_UNET_WEIGHTS", "fenge_best.pth")
 COTTON_IMG_SIZE = env_int("COTTON_IMG_SIZE", 640)
 COTTON_THRESH = env_float("COTTON_THRESH", 0.5)
-COTTON_KEEP_RATIO = env_bool("COTTON_KEEP_RATIO", False)
+COTTON_KEEP_RATIO = env_bool("COTTON_KEEP_RATIO", True)
 COTTON_BILINEAR_UP = env_bool("COTTON_BILINEAR_UP", False)
 
 IMPURITY_UNET_WEIGHTS = resolve_model_path("IMPURITY_UNET_WEIGHTS", "impurityarea_best.pth")
@@ -208,9 +215,22 @@ def resize_mask_to_original(mask_np: np.ndarray, orig_size: tuple[int, int]) -> 
 
 
 def smooth_binary_mask(mask_bin: np.ndarray) -> np.ndarray:
-    mask_u8 = (mask_bin.astype(np.uint8) > 0).astype(np.uint8) * 255
-    if not SMOOTH_EDGES or mask_u8.size == 0 or mask_u8.max() == 0:
-        return (mask_u8 > 0).astype(np.uint8)
+    mask_float = (mask_bin.astype(np.float32) > 0).astype(np.float32)
+    if not SMOOTH_EDGES or mask_float.size == 0 or mask_float.max() == 0:
+        return mask_float.astype(np.uint8)
+
+    if ndimage is not None and binary_closing is not None:
+        smoothed = mask_float
+        if SMOOTH_SIGMA > 0:
+            smoothed = ndimage.gaussian_filter(smoothed, sigma=SMOOTH_SIGMA)
+
+        mask_u8 = (smoothed > 0.5).astype(np.uint8)
+        if SMOOTH_ITERS > 0:
+            structure = np.ones((3, 3), dtype=np.uint8)
+            mask_u8 = binary_closing(mask_u8, structure=structure, iterations=SMOOTH_ITERS)
+        return mask_u8.astype(np.uint8)
+
+    mask_u8 = (mask_float > 0).astype(np.uint8) * 255
 
     if SMOOTH_SIGMA > 0:
         mask_u8 = cv2.GaussianBlur(mask_u8, (0, 0), sigmaX=SMOOTH_SIGMA)
@@ -221,7 +241,6 @@ def smooth_binary_mask(mask_bin: np.ndarray) -> np.ndarray:
         mask_u8 = cv2.morphologyEx(mask_u8, cv2.MORPH_CLOSE, kernel, iterations=SMOOTH_ITERS)
 
     return (mask_u8 > 0).astype(np.uint8)
-
 
 def crop_to_mask_bbox(img_pil: Image.Image, mask_bin: np.ndarray, margin: int):
     ys, xs = np.where(mask_bin > 0)
@@ -247,22 +266,21 @@ def paste_mask_to_original(mask_crop: np.ndarray, bbox, original_shape: tuple[in
     return full
 
 
+# 杂质（叶屑）等级判定标准：与 App「分类标准」页的叶屑等级参数表逐条对应，
+# 数值为“杂质所占的面积/%”上限，第 8 级为级外等级（大于 1.21）。
+LEAF_GRADE_MAX_RATIO_PERCENT = (0.12, 0.20, 0.33, 0.50, 0.68, 0.92, 1.21)
+
+
 def classify_impurity_ratio(ratio_percent: float) -> int:
-    if ratio_percent <= 0.12:
-        return 1
-    if ratio_percent <= 0.20:
-        return 2
-    if ratio_percent <= 0.33:
-        return 3
-    if ratio_percent <= 0.50:
-        return 4
-    if ratio_percent <= 0.68:
-        return 5
-    if ratio_percent <= 0.92:
-        return 6
-    if ratio_percent <= 1.21:
-        return 7
-    return 8
+    """按分类标准的叶屑等级表判定杂质等级。
+
+    表内数值与 App「分类标准」页的叶屑等级参数表（杂质所占的面积/%）完全一致，
+    第 8 级为级外等级（大于 1.21）。
+    """
+    for index, max_ratio_percent in enumerate(LEAF_GRADE_MAX_RATIO_PERCENT):
+        if ratio_percent <= max_ratio_percent:
+            return index + 1
+    return len(LEAF_GRADE_MAX_RATIO_PERCENT) + 1
 
 
 def strip_known_prefixes(key: str) -> str:
@@ -478,14 +496,40 @@ def infer_impurity_in_cotton(img_pil: Image.Image, cotton_mask: np.ndarray) -> n
     return impurity_full
 
 
-def build_image_payload(img_pil: Image.Image, cotton_mask: np.ndarray, impurity_mask: np.ndarray):
-    cotton_mask_url = mask_to_dataurl(cotton_mask)
-    impurity_mask_url = mask_to_dataurl(impurity_mask)
-    cotton_overlay_url = image_to_dataurl(
-        overlay_color(img_pil, cotton_mask, color=(255, 0, 0), alpha=0.35),
+def build_color_feedback_image(img_pil: Image.Image, color_grade: int, confidence: float) -> Image.Image:
+    img = img_pil.copy()
+    draw = ImageDraw.Draw(img, "RGBA")
+    width, _height = img.size
+    text = f"Color grade: {color_grade}    Confidence: {confidence * 100:.1f}%"
+    pad_x = max(12, int(width * 0.015))
+    pad_y = pad_x
+    box_height = max(44, int(width * 0.055))
+    draw.rectangle((pad_x, pad_y, width - pad_x, pad_y + box_height), fill=(255, 255, 255, 210))
+    draw.text((pad_x + 12, pad_y + 12), text, fill=(220, 0, 0, 255))
+    return img
+
+
+def build_image_payload(
+    img_pil: Image.Image,
+    cotton_mask: np.ndarray,
+    impurity_mask: np.ndarray,
+    color_grade: int,
+    confidence: float,
+):
+    color_feedback_url = image_to_dataurl(
+        build_color_feedback_image(img_pil, color_grade, confidence),
         fmt="JPEG",
         quality=85,
     )
+    # 棉花区域：原始图片上叠加一层半透明红色掩膜。
+    # 有红色的地方即棉花区域，且仍能看清下面的原始图片；不裁剪、不重新生成。
+    cotton_overlay_url = image_to_dataurl(
+        overlay_color(img_pil, cotton_mask, color=(255, 0, 0), alpha=0.4),
+        fmt="JPEG",
+        quality=88,
+    )
+    # 杂质区域：黑色背景，白色区域为识别到的杂质。
+    impurity_mask_url = mask_to_dataurl(impurity_mask)
     impurity_overlay_url = image_to_dataurl(
         overlay_color(img_pil, impurity_mask, color=(255, 0, 0), alpha=0.45),
         fmt="JPEG",
@@ -498,7 +542,10 @@ def build_image_payload(img_pil: Image.Image, cotton_mask: np.ndarray, impurity_
     )
 
     return {
-        "cottonMaskImage": cotton_mask_url,
+        "colorFeedbackImage": color_feedback_url,
+        # 棉花区域：原图 + 半透明红色掩膜
+        "cottonMaskImage": cotton_overlay_url,
+        # 杂质区域：黑底白斑，白色为杂质
         "impurityMaskImage": impurity_mask_url,
         "cottonOverlayImage": cotton_overlay_url,
         "impurityOverlayImage": impurity_overlay_url,
@@ -507,9 +554,9 @@ def build_image_payload(img_pil: Image.Image, cotton_mask: np.ndarray, impurity_
         "impurityAreaImage": impurity_mask_url,
     }
 
-
 def empty_image_payload():
     return {
+        "colorFeedbackImage": None,
         "cottonMaskImage": None,
         "impurityMaskImage": None,
         "cottonOverlayImage": None,
@@ -519,9 +566,12 @@ def empty_image_payload():
         "impurityAreaImage": None,
     }
 
+
 def request_too_large_response():
     result = {
         "error": "图片文件过大",
+        "grade": "",
+        "conclusion": "图片文件过大，未进行模型识别",
         "detectionResult": {
             "colorGrade": -1,
             "impurityGrade": -1,
@@ -585,10 +635,19 @@ def predict():
         impurity_mask = infer_impurity_in_cotton(img_pil, cotton_mask)
         impurity_area_px = int((impurity_mask > 0).sum())
         area_ratio = float(impurity_area_px) / max(1.0, float(cotton_area_count))
-        impurity_grade = classify_impurity_ratio(area_ratio * 100.0)
+        ratio_percent = area_ratio * 100.0
+        impurity_grade = classify_impurity_ratio(ratio_percent)
         t3 = time.time()
 
+        grade_text = f"{color_grade} / {impurity_grade}"
+        conclusion = (
+            f"颜色等级 {color_grade}，杂质等级 {impurity_grade}，"
+            f"杂质面积比 {ratio_percent:.4f}%。"
+        )
+
         result = {
+            "grade": grade_text,
+            "conclusion": conclusion,
             "detectionResult": {
                 "colorGrade": color_grade,
                 "impurityGrade": impurity_grade,
@@ -597,8 +656,16 @@ def predict():
                 "areaRatio": round(area_ratio, 6),
                 "confidence": round(confidence, 4),
             },
-            "label": color_grade,
+            "label": str(color_grade),
             "confidence": round(confidence, 4),
+            "metrics": [
+                {"label": "颜色等级", "value": str(color_grade), "hint": "colorGrade"},
+                {"label": "杂质等级", "value": str(impurity_grade), "hint": "impurityGrade"},
+                {"label": "棉花区域占比", "value": f"{cotton_area_pct:.4f}%", "hint": "cottonArea"},
+                {"label": "杂质面积", "value": f"{impurity_area_px} px", "hint": "impurityArea"},
+                {"label": "杂质面积比", "value": f"{ratio_percent:.4f}%", "hint": "areaRatio"},
+                {"label": "模型置信度", "value": f"{confidence * 100:.2f}%", "hint": "confidence"},
+            ],
             "timing": {
                 "classify_sec": round(t1 - t0, 3),
                 "cotton_unet_sec": round(t2 - t1, 3),
@@ -611,16 +678,26 @@ def predict():
                 "colorArch": COLOR_ARCH_NAME,
                 "cottonModel": os.path.basename(COTTON_UNET_WEIGHTS),
                 "impurityModel": os.path.basename(IMPURITY_UNET_WEIGHTS),
+                "cottonKeepRatio": COTTON_KEEP_RATIO,
+                "impurityKeepRatio": IMPURITY_KEEP_RATIO,
+                "cottonThreshold": COTTON_THRESH,
+                "impurityThreshold": IMPURITY_THRESH,
             },
         }
 
-        result.update(build_image_payload(img_pil, cotton_mask, impurity_mask) if include_images else empty_image_payload())
+        result.update(
+            build_image_payload(img_pil, cotton_mask, impurity_mask, color_grade, confidence)
+            if include_images
+            else empty_image_payload()
+        )
         return jsonify(result), 200
 
     except Exception as exc:
         print(f"[ERROR] predict failed: {exc}")
         result = {
             "error": "模型推理失败，请检查图片后重试",
+            "grade": "",
+            "conclusion": "模型推理失败，未生成有效识别结果",
             "detectionResult": {
                 "colorGrade": -1,
                 "impurityGrade": -1,
@@ -634,7 +711,6 @@ def predict():
         }
         result.update(empty_image_payload())
         return jsonify(result), 500
-
 
 @app.route("/health")
 def health():

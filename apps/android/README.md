@@ -15,7 +15,7 @@ npm run typecheck
 复制 `.env.example` 为 `.env.local`：
 
 ```text
-EXPO_PUBLIC_API_BASE_URL=http://your-domain-or-ip:8080
+EXPO_PUBLIC_API_BASE_URL=http://your-domain-or-ip:8088
 ```
 
 必须配置真实后端地址。真机联调或正式打包时使用公网域名、服务器 IP 或局域网 IP，例如：

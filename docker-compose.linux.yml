@@ -1,0 +1,32 @@
+# Linux 部署覆盖配置
+# 在 docker-compose.yml 基础上补充 GPU 支持和端口映射
+#
+# 用法：
+#   docker compose -f docker-compose.yml -f docker-compose.linux.yml up -d --build
+
+services:
+  model-service:
+    ports:
+      # 仅绑定本机，供健康检查使用；不对局域网暴露模型服务
+      - "127.0.0.1:5000:5000"
+    # GPU 加速（需要 nvidia-container-toolkit）
+    # 如果实验室电脑没有 NVIDIA GPU，注释掉 deploy 块即可使用 CPU 推理
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    # 开机自启（已在 docker-compose.yml 顶层定义 restart: unless-stopped）
+    # 系统级开机自启用 systemd 管理（见 deploy-lan.sh）
+
+  backend:
+    depends_on:
+      mysql:
+        condition: service_healthy
+      model-service:
+        condition: service_started
+    # model-service 通过 Docker 内部网络可达，无需 extra_hosts
+    ports:
+      - "${BACKEND_PUBLIC_PORT:-8088}:8080"

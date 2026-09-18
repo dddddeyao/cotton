@@ -2,13 +2,12 @@ import { RecognitionResult } from '../types';
 
 type RecognitionImageField =
   | 'imageUri'
+  | 'colorFeedbackImage'
   | 'impurityOverlayImage'
   | 'cottonOverlayImage'
   | 'blackBackgroundImpurityOverlay'
   | 'impurityMaskImage'
-  | 'cottonMaskImage'
-  | 'impurityAreaImage'
-  | 'cottonAreaImage';
+  | 'cottonMaskImage';
 
 export type RecognitionImageLayer = {
   key: RecognitionImageField;
@@ -27,12 +26,13 @@ type LayerDefinition = {
 const primaryImageOrder: RecognitionImageField[] = ['imageUri'];
 
 const layerDefinitions: LayerDefinition[] = [
-  { key: 'imageUri', title: '原始样本', badge: 'SOURCE', isSource: true },
-  { key: 'impurityOverlayImage', title: '杂质叠加', badge: 'OVERLAY' },
-  { key: 'cottonOverlayImage', title: '棉区叠加', badge: 'OVERLAY' },
-  { key: 'blackBackgroundImpurityOverlay', title: '黑底杂质', badge: 'OVERLAY' },
-  { key: 'impurityMaskImage', title: '杂质掩模', badge: 'MASK' },
-  { key: 'cottonMaskImage', title: '棉花掩模', badge: 'MASK' },
+  { key: 'imageUri', title: '原始样本', badge: '原始', isSource: true },
+  { key: 'colorFeedbackImage', title: '颜色反馈', badge: '颜色' },
+  { key: 'impurityOverlayImage', title: '杂质叠加', badge: '叠加' },
+  { key: 'cottonOverlayImage', title: '棉区叠加', badge: '叠加' },
+  { key: 'blackBackgroundImpurityOverlay', title: '黑底杂质', badge: '叠加' },
+  { key: 'impurityMaskImage', title: '杂质掩模', badge: '掩模' },
+  { key: 'cottonMaskImage', title: '棉花掩模', badge: '掩模' },
 ];
 
 function getImageUri(result: RecognitionResult, key: RecognitionImageField) {

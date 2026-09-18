@@ -6,11 +6,9 @@ import {
   FlatList,
   Image,
   ListRenderItem,
-  NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -22,11 +20,26 @@ import { EmptyState } from '../components/common';
 import { hasRealNewsImage } from '../services/newsImages';
 import { colors, shadow, spacing } from '../theme';
 import { NewsItem } from '../types';
+import { formatDate } from '../utils/format';
 
 const NEWS_PAGE_SIZE = 10;
 
+// 前沿瞭望顶部横幅（图片已裁为 799×400 的横幅比例）
+const newsBanner = require('../../assets/news-banner.jpg');
+const NEWS_BANNER_RATIO = 799 / 400;
+
+type NewsImageLoadEvent = NativeSyntheticEvent<{
+  source?: {
+    width?: number;
+    height?: number;
+  };
+}>;
+
 function formatRefreshTime(timestamp: number) {
-  return new Date(timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  const date = new Date(timestamp);
+  const h = String(date.getHours()).padStart(2, '0');
+  const m = String(date.getMinutes()).padStart(2, '0');
+  return `${h}:${m}`;
 }
 
 type NewsScreenProps = {
@@ -51,14 +64,9 @@ export function NewsScreen({
   onOpenNews,
 }: NewsScreenProps) {
   const [query, setQuery] = useState('');
-  const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [visibleCount, setVisibleCount] = useState(NEWS_PAGE_SIZE);
   const [failedImageUris, setFailedImageUris] = useState<Set<string>>(() => new Set());
   const refreshProgress = useRef(new Animated.Value(0)).current;
-  const imageNews = useMemo(
-    () => news.filter((item) => hasRealNewsImage(item.imageUrl) && !failedImageUris.has(item.imageUrl)).slice(0, 5),
-    [failedImageUris, news],
-  );
   const filteredNews = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) {
@@ -71,48 +79,19 @@ export function NewsScreen({
   }, [news, query]);
   const visibleNews = useMemo(() => filteredNews.slice(0, visibleCount), [filteredNews, visibleCount]);
   const hasLocalHiddenNews = visibleCount < filteredNews.length;
-  const refreshText = isRefreshing ? '更新中' : updatedAt ? '已更新 ' + formatRefreshTime(updatedAt) : '下拉刷新';
-  const categoryCount = useMemo(() => new Set(news.map((item) => item.category).filter(Boolean)).size, [news]);
-  const monitorMetrics = useMemo(
-    () => [
-      { label: '分类', value: String(categoryCount).padStart(2, '0') },
-      { label: '图像', value: String(imageNews.length).padStart(2, '0') },
-    ],
-    [categoryCount, imageNews.length],
-  );
-  const carouselScrollRef = useRef<ScrollView>(null);
   const { width: windowWidth } = useWindowDimensions();
-  const carouselWidth = Math.max(1, windowWidth - spacing.page * 2);
+  const contentWidth = Math.max(1, windowWidth - spacing.page * 2);
+  // 横幅宽高按图片真实比例显式计算，不依赖 aspectRatio，避免比例失衡
+  const bannerHeight = Math.round(contentWidth / NEWS_BANNER_RATIO);
+  const trimmedQuery = query.trim();
   const refreshRotate = refreshProgress.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '360deg'],
   });
 
-  const scrollToSlide = useCallback(
-    (index: number, animated = true) => {
-      const boundedIndex = Math.min(Math.max(index, 0), Math.max(imageNews.length - 1, 0));
-      setActiveSlideIndex(boundedIndex);
-      carouselScrollRef.current?.scrollTo({ x: boundedIndex * carouselWidth, animated });
-    },
-    [carouselWidth, imageNews.length],
-  );
-
-  const handleCarouselMomentumEnd = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const nextIndex = Math.round(event.nativeEvent.contentOffset.x / carouselWidth);
-      setActiveSlideIndex(Math.min(Math.max(nextIndex, 0), Math.max(imageNews.length - 1, 0)));
-    },
-    [carouselWidth, imageNews.length],
-  );
-  useEffect(() => {
-    setActiveSlideIndex(0);
-    carouselScrollRef.current?.scrollTo({ x: 0, animated: false });
-  }, [imageNews.length]);
-
   useEffect(() => {
     setVisibleCount(NEWS_PAGE_SIZE);
   }, [query]);
-
 
   useEffect(() => {
     if (!isRefreshing) {
@@ -135,22 +114,6 @@ export function NewsScreen({
     return () => refreshLoop.stop();
   }, [isRefreshing, refreshProgress]);
 
-  useEffect(() => {
-    if (imageNews.length <= 1) {
-      return undefined;
-    }
-
-    const timer = setInterval(() => {
-      setActiveSlideIndex((current) => {
-        const next = (current + 1) % imageNews.length;
-        carouselScrollRef.current?.scrollTo({ x: next * carouselWidth, animated: true });
-        return next;
-      });
-    }, 4200);
-
-    return () => clearInterval(timer);
-  }, [carouselWidth, imageNews.length]);
-
   const handleLoadMore = useCallback(() => {
     if (hasLocalHiddenNews) {
       setVisibleCount((current) => Math.min(current + NEWS_PAGE_SIZE, filteredNews.length));
@@ -160,42 +123,78 @@ export function NewsScreen({
     onLoadMore();
   }, [filteredNews.length, hasLocalHiddenNews, onLoadMore]);
 
-  const renderNewsItem: ListRenderItem<NewsItem> = ({ item, index }) => (
-    <Pressable
-      style={({ pressed }) => [styles.newsCard, pressed && styles.newsCardPressed]}
-      onPress={() => onOpenNews(item)}
-      accessibilityRole="button"
-    >
-      {hasRealNewsImage(item.imageUrl) && !failedImageUris.has(item.imageUrl) ? (
-        <Image
-          source={{ uri: item.imageUrl }}
-          style={styles.newsImage}
-          onError={() => {
-            setFailedImageUris((current) => new Set(current).add(item.imageUrl));
-          }}
-        />
-      ) : null}
-      <View style={styles.newsBody}>
-        <View style={styles.newsMetaRow}>
-          <Text style={styles.newsSource} numberOfLines={1}>{item.source || '来源未返回'}</Text>
-          <Text style={styles.newsDate}>{item.date}</Text>
-        </View>
-        <Text style={styles.newsTitle} numberOfLines={2}>
-          {item.title}
-        </Text>
-        <Text style={styles.newsSummary} numberOfLines={3}>
-          {item.summary || '摘要未返回'}
-        </Text>
-        <View style={styles.cardFooter}>
-          <Text style={styles.categoryTag}>{item.category || '分类未返回'}</Text>
-          <View style={styles.openHint}>
-            <Text style={styles.openHintText}>{String(index + 1).padStart(2, '0')}</Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.primaryDark} />
+  const hideNewsImage = useCallback((uri: string) => {
+    if (!uri) {
+      return;
+    }
+
+    setFailedImageUris((current) => {
+      if (current.has(uri)) {
+        return current;
+      }
+
+      const next = new Set(current);
+      next.add(uri);
+      return next;
+    });
+  }, []);
+
+  const handleNewsImageLoad = useCallback(
+    (uri: string, event: NewsImageLoadEvent) => {
+      const width = Number(event.nativeEvent.source?.width ?? 0);
+      const height = Number(event.nativeEvent.source?.height ?? 0);
+
+      if ((width > 0 && width < 260) || (height > 0 && height < 120)) {
+        hideNewsImage(uri);
+      }
+    },
+    [hideNewsImage],
+  );
+
+  const renderNewsItem: ListRenderItem<NewsItem> = ({ item }) => {
+    const hasDisplayImage = hasRealNewsImage(item.imageUrl) && !failedImageUris.has(item.imageUrl);
+    const formattedDate = item.date ? formatDate(item.date) : '';
+
+    return (
+      <Pressable
+        style={({ pressed }) => [
+          styles.newsCard,
+          !hasDisplayImage && styles.newsCardTextOnly,
+          pressed && styles.newsCardPressed,
+        ]}
+        onPress={() => onOpenNews(item)}
+        accessibilityRole="button"
+      >
+        {hasDisplayImage ? (
+          <Image
+            source={{ uri: item.imageUrl }}
+            style={styles.newsImage}
+            onLoad={(event) => handleNewsImageLoad(item.imageUrl, event)}
+            onError={() => hideNewsImage(item.imageUrl)}
+          />
+        ) : null}
+        <View style={styles.newsBody}>
+          <Text style={styles.newsTitle} numberOfLines={2}>
+            {item.title}
+          </Text>
+          {formattedDate ? <Text style={styles.newsDate}>{formattedDate}</Text> : null}
+          {item.summary ? (
+            <Text style={styles.newsSummary} numberOfLines={3}>
+              {item.summary}
+            </Text>
+          ) : null}
+          <View style={styles.cardFooter}>
+            <View style={styles.openHint}>
+              <Ionicons name="chevron-forward" size={16} color={colors.primaryDark} />
+            </View>
           </View>
         </View>
-      </View>
-    </Pressable>
-  );
+      </Pressable>
+    );
+  };
+
+  const emptyTitle = trimmedQuery ? '未找到匹配资讯' : '暂无棉花资讯';
+  const emptyText = trimmedQuery ? '换一个关键词再试。' : '当前没有可展示的棉花资讯。';
 
   return (
     <FlatList
@@ -216,114 +215,42 @@ export function NewsScreen({
       }
       ListHeaderComponent={
         <>
-          {imageNews.length > 0 ? (
-            <View style={styles.carouselShell}>
-              <ScrollView
-                ref={carouselScrollRef}
-                horizontal
-                pagingEnabled
-                nestedScrollEnabled
-                showsHorizontalScrollIndicator={false}
-                onMomentumScrollEnd={handleCarouselMomentumEnd}
-                scrollEventThrottle={16}
-              >
-                {imageNews.map((item) => (
-                  <Pressable
-                    key={item.id}
-                    style={({ pressed }) => [
-                      styles.carouselPanel,
-                      { width: carouselWidth },
-                      pressed ? styles.newsCardPressed : null,
-                    ]}
-                    onPress={() => onOpenNews(item)}
-                    accessibilityRole="button"
-                  >
-                    <Image
-                      source={{ uri: item.imageUrl }}
-                      style={styles.carouselImage}
-                      onError={() => {
-                        setFailedImageUris((current) => new Set(current).add(item.imageUrl));
-                      }}
-                    />
-                    <View style={styles.carouselOverlay}>
-                      <View style={styles.carouselMetaRow}>
-                        <Text style={styles.carouselSource} numberOfLines={1}>
-                          {item.source}
-                        </Text>
-                        <Text style={styles.carouselDate}>{item.date}</Text>
-                      </View>
-                      <Text style={styles.carouselTitle} numberOfLines={2}>
-                        {item.title}
-                      </Text>
-                    </View>
-                  </Pressable>
-                ))}
-              </ScrollView>
+          {/* 页面最顶部横幅（静态图），宽高按图片真实比例计算，等比显示不变形 */}
+          <Image
+            source={newsBanner}
+            style={[styles.newsBanner, { width: contentWidth, height: bannerHeight }]}
+            resizeMode="cover"
+          />
 
-              {imageNews.length > 1 ? (
-                <View style={styles.carouselDots}>
-                  {imageNews.map((item, index) => (
-                    <Pressable
-                      key={item.id}
-                      style={[styles.carouselDot, index === activeSlideIndex && styles.carouselDotActive]}
-                      onPress={() => scrollToSlide(index)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`切换到第 ${index + 1} 张新闻图片`}
-                    />
-                  ))}
-                </View>
-              ) : null}
-            </View>
-          ) : null}
-          <View style={styles.monitorStrip}>
-            {monitorMetrics.map((metric) => (
-              <View key={metric.label} style={styles.monitorMetric}>
-                <Text style={styles.monitorMetricValue}>{metric.value}</Text>
-                <Text style={styles.monitorMetricLabel}>{metric.label}</Text>
-              </View>
-            ))}
-            <Pressable
-              style={({ pressed }) => [styles.refreshStatus, pressed && styles.newsCardPressed]}
-              onPress={onRefresh}
-              accessibilityRole="button"
-            >
-              <Animated.View
-                style={[
-                  styles.refreshStatusIcon,
-                  isRefreshing ? { transform: [{ rotate: refreshRotate }] } : null,
-                ]}
-              >
-                <Ionicons name="sync" size={13} color={colors.primaryDark} />
-              </Animated.View>
-              <Text style={styles.refreshStatusText}>{refreshText}</Text>
-            </Pressable>
-          </View>
           <View style={styles.searchBox}>
             <Ionicons name="search-outline" size={22} color={colors.muted} />
             <TextInput
               value={query}
               onChangeText={setQuery}
-              placeholder="输入棉花、海关、行情关键词"
+              placeholder="输入关键词"
               placeholderTextColor="#8a979f"
               style={styles.searchInput}
             />
           </View>
 
           <View style={styles.listHeader}>
-            <View>
-              <Text style={styles.listHeaderText}>行业新闻</Text>
-
-            </View>
-            <View style={styles.listHeaderBadge}>
-              <Ionicons name="newspaper-outline" size={13} color={colors.muted} />
-              <Text style={styles.listHeaderMeta}>{isRefreshing ? '同步中' : '资讯'}</Text>
-            </View>
+            <Text style={styles.listHeaderText}>行业新闻</Text>
+            <Pressable
+              style={({ pressed }) => [styles.refreshButton, pressed && { opacity: 0.72 }]}
+              onPress={onRefresh}
+              accessibilityRole="button"
+            >
+              <Animated.View style={isRefreshing ? { transform: [{ rotate: refreshRotate }] } : null}>
+                <Ionicons name="refresh-outline" size={20} color={colors.primaryDark} />
+              </Animated.View>
+              {updatedAt && !isRefreshing ? (
+                <Text style={styles.refreshText}>已更新 {formatRefreshTime(updatedAt)}</Text>
+              ) : null}
+            </Pressable>
           </View>
         </>
       }
-      ListEmptyComponent={
-        <EmptyState title="正在同步棉花资讯" text="本地暂无缓存，正在同步棉花、海关与行业资讯。" />
-      }
+      ListEmptyComponent={<EmptyState title={emptyTitle} text={emptyText} />}
       ListFooterComponent={
         visibleNews.length > 0 ? (
           <Text style={styles.footerText}>{isLoadingMore ? '加载中' : hasLocalHiddenNews || hasMore ? '继续下滑加载' : '没有更多'}</Text>
@@ -339,125 +266,14 @@ const styles = StyleSheet.create({
     paddingBottom: 96,
     backgroundColor: colors.background,
   },
-  carouselShell: {
-    height: 206,
+  // 顶部横幅（静态图）：尺寸由 JS 按图片真实比例算出，这里只负责外观
+  newsBanner: {
     borderRadius: spacing.radius,
     borderWidth: 1,
     borderColor: colors.line,
-    backgroundColor: colors.ink,
+    backgroundColor: colors.surface,
     overflow: 'hidden',
-    ...shadow,
-  },
-  carouselPanel: {
-    height: 206,
-    backgroundColor: colors.ink,
-  },
-  carouselImage: {
-    width: '100%',
-    height: 206,
-    resizeMode: 'cover',
-  },
-  carouselOverlay: {
-    ...StyleSheet.absoluteFill,
-    justifyContent: 'flex-end',
-    padding: 14,
-    paddingBottom: 36,
-    backgroundColor: 'rgba(12, 24, 28, 0.36)',
-  },
-  carouselMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  carouselSource: {
-    flex: 1,
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  carouselDate: {
-    color: 'rgba(255, 255, 255, 0.82)',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  carouselTitle: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '900',
-    lineHeight: 26,
-    marginTop: 8,
-  },
-  carouselDots: {
-    position: 'absolute',
-    left: 14,
-    right: 14,
-    bottom: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  carouselDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.42)',
-  },
-  carouselDotActive: {
-    width: 18,
-    backgroundColor: '#ffffff',
-  },
-  monitorStrip: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: 8,
-    marginTop: 12,
-  },
-  monitorMetric: {
-    flex: 1,
-    minHeight: 58,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.surfaceStrong,
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-  },
-  monitorMetricValue: {
-    color: colors.primaryDark,
-    fontSize: 18,
-    fontWeight: '900',
-    lineHeight: 22,
-  },
-  monitorMetricLabel: {
-    color: colors.muted,
-    fontSize: 10,
-    fontWeight: '800',
-    marginTop: 2,
-  },
-  refreshStatus: {
-    minWidth: 82,
-    minHeight: 58,
-    borderWidth: 1,
-    borderColor: colors.primaryDark,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-  },
-  refreshStatusIcon: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceStrong,
-    marginBottom: 3,
-  },
-  refreshStatusText: {
-    color: colors.primaryDark,
-    fontSize: 10,
-    fontWeight: '900',
-    textAlign: 'center',
+    marginBottom: 12,
   },
   searchBox: {
     minHeight: 48,
@@ -487,21 +303,15 @@ const styles = StyleSheet.create({
   },
   listHeaderText: {
     color: colors.ink,
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '900',
   },
-
-  listHeaderBadge: {
+  refreshButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.surfaceStrong,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
   },
-  listHeaderMeta: {
+  refreshText: {
     color: colors.muted,
     fontSize: 12,
     fontWeight: '700',
@@ -518,28 +328,16 @@ const styles = StyleSheet.create({
   newsCardPressed: {
     opacity: 0.72,
   },
+  newsCardTextOnly: {
+    overflow: 'visible',
+  },
   newsImage: {
     width: '100%',
     height: 142,
     resizeMode: 'cover',
-    backgroundColor: '#dce5ea',
   },
-
   newsBody: {
     padding: 12,
-  },
-  newsMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-    gap: 10,
-  },
-  newsSource: {
-    flex: 1,
-    color: colors.primaryDark,
-    fontSize: 12,
-    fontWeight: '900',
   },
   newsTitle: {
     color: colors.ink,
@@ -557,32 +355,18 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 12,
     fontWeight: '700',
+    marginTop: 6,
   },
   cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 12,
-  },
-  categoryTag: {
-    color: colors.primaryDark,
-    fontSize: 11,
-    fontWeight: '900',
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.primarySoft,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    justifyContent: 'flex-end',
+    marginTop: 10,
   },
   openHint: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-  },
-  openHintText: {
-    color: colors.primaryDark,
-    fontSize: 12,
-    fontWeight: '900',
   },
   footerText: {
     color: colors.muted,
