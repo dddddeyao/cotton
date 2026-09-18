@@ -20,11 +20,9 @@ import { RecognitionHistoryScreen } from './src/screens/RecognitionHistoryScreen
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { EditProfileScreen } from './src/screens/EditProfileScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
-import { ServerSetupScreen } from './src/screens/ServerSetupScreen';
 import { SimplePage } from './src/screens/SimplePage';
 import { LaunchScreen } from './src/screens/LaunchScreen';
-import { appConfig, getApiBaseUrl, getDefaultApiBaseUrl, setRuntimeApiBaseUrl } from './src/config';
-import { getStoredServerUrl } from './src/services/serverConfig';
+import { appConfig } from './src/config';
 import { cottonNews } from './src/data/newsData';
 import { api } from './src/services/api';
 import { cache } from './src/storage/cache';
@@ -74,14 +72,6 @@ export default function App() {
 
     async function bootstrap() {
       try {
-        // 服务器地址：优先使用用户在 App 内保存的，其次使用打包时的默认值
-        const storedServerUrl = await getStoredServerUrl();
-        const initialServerUrl = storedServerUrl || getDefaultApiBaseUrl();
-
-        if (initialServerUrl) {
-          setRuntimeApiBaseUrl(initialServerUrl);
-        }
-
         const cachedSession = await cache.getSession();
         const cachedHistory = await cache.getHistory(cachedSession?.username);
 
@@ -94,11 +84,6 @@ export default function App() {
         }
 
         setSession(cachedSession);
-
-        // 首次启动且没有任何可用地址时，直接引导用户去填写
-        if (!initialServerUrl) {
-          setView({ name: 'serverSetup' });
-        }
       } finally {
         if (isMounted) {
           setIsBootstrapped(true);
@@ -246,7 +231,7 @@ export default function App() {
         '检测失败',
         [
           getErrorMessage(error),
-          `接口：${getApiBaseUrl()}${appConfig.endpoints.recognition}`,
+          `接口：${appConfig.apiBaseUrl}${appConfig.endpoints.recognition}`,
           `图片来源：${imageUriScheme(selectedImageUri)}`,
           `登录状态：${session?.token ? '已登录' : '未登录'}`,
         ].join('\n'),
@@ -307,21 +292,11 @@ export default function App() {
     }
 
 
-    if (view.name === 'serverSetup') {
-      return (
-        <ServerSetupScreen
-          onBack={() => setView({ name: 'settings' })}
-          onSaved={() => setView({ name: 'settings' })}
-        />
-      );
-    }
-
     if (view.name === 'settings') {
       return (
         <SettingsScreen
           session={session}
           onBack={openTabs}
-          onOpenServerSetup={() => setView({ name: 'serverSetup' })}
           onClearCache={async () => {
             await cache.clearRuntimeData(session?.username);
             setHistory([]);

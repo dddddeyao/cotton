@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { SettingsRow, StackPage } from '../components/common';
-import { getApiBaseUrl } from '../config';
 import { api } from '../services/api';
 import { colors, spacing } from '../theme';
 import { UserSession } from '../types';
@@ -14,14 +13,12 @@ export function SettingsScreen({
   onBack,
   onClearCache,
   onLogout,
-  onOpenServerSetup,
   isLoggingOut,
 }: {
   session: UserSession | null;
   onBack: () => void;
   onClearCache: () => void;
   onLogout: () => void | Promise<void>;
-  onOpenServerSetup: () => void;
   isLoggingOut: boolean;
 }) {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
@@ -72,11 +69,6 @@ export function SettingsScreen({
     <StackPage title="应用设置" onBack={onBack}>
       <ScrollView style={styles.scroll} contentContainerStyle={[styles.page, { paddingBottom: spacing.page + bottomInset }]} showsVerticalScrollIndicator={false}>
 
-        <SettingsRow
-          title="服务器地址"
-          subtitle={getApiBaseUrl() || '未设置，点击填写'}
-          onPress={onOpenServerSetup}
-        />
         <SettingsRow
           title={isChangingPassword ? '正在提交...' : '修改密码'}
           disabled={isChangingPassword}

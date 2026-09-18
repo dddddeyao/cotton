@@ -72,5 +72,4 @@ export type AppView =
   | { name: 'recognitionHistory' }
   | { name: 'editProfile' }
   | { name: 'settings' }
-  | { name: 'serverSetup' }
   | { name: 'agreement'; kind: 'user' | 'privacy' };

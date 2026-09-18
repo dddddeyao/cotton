@@ -1,45 +1,29 @@
 <#
 .SYNOPSIS
   棉花智能识别系统 — APK 构建脚本
+  用指定的局域网 IP 重新构建 Release APK
 .DESCRIPTION
   在 Windows 开发机上运行（需要 Android SDK）。
-
-  两种用法：
-  1) 通用版（推荐，一次打包到处用）：
-       .\build-apk-lan.ps1
-     不预置后端地址；App 首次启动会引导用户填写，或点「自动搜索服务器」。
-     之后无论部署到哪台电脑，只要在 App 里改一下地址即可，无需重新打包。
-
-  2) 指定地址版（开箱即用，但换电脑需重打）：
-       .\build-apk-lan.ps1 -LanIP "192.168.1.100" -Port 8088
+  用法: .\build-apk-lan.ps1 [-LanIP "192.168.1.100"] [-Port 8088]
 .EXAMPLE
-  .\build-apk-lan.ps1
   .\build-apk-lan.ps1 -LanIP "192.168.1.100"
 #>
 param(
-  [string]$LanIP = '',
+  [Parameter(Mandatory = $true)]
+  [string]$LanIP,
   [int]$Port = 8088
 )
 
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $androidDir = Join-Path $projectRoot "apps\android"
+$apkName = "cotton-recognition-$LanIP.apk"
 
-if ([string]::IsNullOrWhiteSpace($LanIP)) {
-  $apiBaseUrl = ''
-  $apkName = "cotton-recognition.apk"
-  Write-Host "==> 构建【通用版】Release APK（不预置服务器地址）..." -ForegroundColor Cyan
-  Write-Host "    安装后首次打开会引导填写 / 自动搜索服务器地址" -ForegroundColor Gray
-} else {
-  $LanIP = $LanIP.Trim()
-  $apiBaseUrl = "http://${LanIP}:${Port}"
-  $apkName = "cotton-recognition-$LanIP.apk"
-  Write-Host "==> 为局域网 IP $LanIP 构建 Release APK ..." -ForegroundColor Cyan
-}
+Write-Host "==> 为局域网 IP $LanIP 构建 Release APK ..." -ForegroundColor Cyan
 
 # 写入 .env.local
 $envLocal = @"
-EXPO_PUBLIC_API_BASE_URL=$apiBaseUrl
+EXPO_PUBLIC_API_BASE_URL=http://$LanIP`:$Port
 EXPO_PUBLIC_REQUEST_TIMEOUT_MS=15000
 EXPO_PUBLIC_RECOGNITION_TIMEOUT_MS=180000
 EXPO_PUBLIC_RECOGNITION_UPLOAD_FIELD_NAME=file
@@ -47,11 +31,7 @@ EXPO_PUBLIC_RECOGNITION_UPLOAD_FIELD_NAME=file
 
 $envLocalPath = Join-Path $androidDir ".env.local"
 Set-Content -Path $envLocalPath -Value $envLocal -Encoding UTF8
-if ($apiBaseUrl) {
-  Write-Host "  [OK] .env.local 已配置 API_BASE_URL=$apiBaseUrl" -ForegroundColor Green
-} else {
-  Write-Host "  [OK] .env.local 已写入（API_BASE_URL 留空，改由 App 内配置）" -ForegroundColor Green
-}
+Write-Host "  [OK] .env.local 已配置 API_BASE_URL=http://${LanIP}:${Port}" -ForegroundColor Green
 
 # 清理旧的构建
 $buildDir = Join-Path $androidDir "android\app\build"
