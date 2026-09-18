@@ -8,6 +8,7 @@
     "expo": "~56.0.6",
     "expo-dev-client": "~56.0.16",
     "expo-image-picker": "~56.0.14",
+    "expo-network": "~56.0.5",
     "expo-status-bar": "~56.0.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",

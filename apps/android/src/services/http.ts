@@ -1,4 +1,4 @@
-﻿import { appConfig } from '../config';
+﻿import { appConfig, getApiBaseUrl } from '../config';
 
 type RequestJsonOptions = {
   method?: string;
@@ -19,7 +19,7 @@ type ApiEnvelope<T> = {
 
 export class ApiUnavailableError extends Error {
   constructor() {
-    super('API_BASE_URL 未配置');
+    super('尚未配置服务器地址，请先在「应用设置 → 服务器地址」中填写。');
   }
 }
 
@@ -34,7 +34,7 @@ function isFormData(body: unknown): body is FormData {
 }
 
 function buildUrl(path: string) {
-  const baseUrl = appConfig.apiBaseUrl.replace(/\/+$/, '');
+  const baseUrl = getApiBaseUrl().replace(/\/+$/, '');
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
 
   return `${baseUrl}${normalizedPath}`;
@@ -86,7 +86,7 @@ function unwrapEnvelope<T>(payload: unknown): T {
 }
 
 export async function requestJson<T>(path: string, options: RequestJsonOptions = {}): Promise<T> {
-  if (!appConfig.apiBaseUrl) {
+  if (!getApiBaseUrl()) {
     throw new ApiUnavailableError();
   }
 
