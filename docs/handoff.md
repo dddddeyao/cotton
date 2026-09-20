@@ -749,7 +749,21 @@ COLOR_RESIZE_SIZE = env_int("COLOR_RESIZE_SIZE", 320)   # ← 短边 320，比�
 
 - ⏳ 能否重训：包里**没有训练集**（`datasets/cotton_fourtime_data` 未提供），重训需要作者配合；
 - ⏳ 现场拍摄规范能否限定，这直接决定置信度能否稳定在高位；
-- ⏳ 修复已在代码与本地复验，但**尚未在部署服务器上重启验证**（需重新部署模型服务后，用同样三张图核对是否为 51/33.2%、51/63.7%、51/58.9%）。
+- ⏳ 修复已在代码与本地复验，但**尚未在部署服务器上重启验证**。重新部署后按下面两条确认（Python 代码是**打进镜像**的，必须带 `--build`，只 `restart` 无效）：
+
+  ```bash
+  # 有 GPU（默认目标机形态）
+  sudo docker compose -f docker-compose.yml -f docker-compose.linux.yml up -d --build model-service
+  # 无 GPU（CPU 回退）
+  sudo docker compose up -d --build model-service
+
+  # ① 预处理参数（应为 256 / 224）
+  sudo docker compose exec model-service python -c "import model_service2 as m;print(m.COLOR_RESIZE_SIZE, m.COLOR_IMG_SIZE)"
+  # ② 端到端（三张对照图应为 51/33.2%、51/63.7%、51/58.9%）
+  curl -s -F "file=@sample1.jpg" "http://127.0.0.1:8088/recognition?images=0" | grep -oE '"(colorGrade|confidence)":[0-9.]+'
+  ```
+
+  为方便现场确认，模型服务 `/health` 与识别结果 `modelInfo` 已新增 `colorResize` / `colorCrop` 字段（有 GPU 映射 5000 端口时可 `curl http://127.0.0.1:5000/health` 直接看到 `"colorResize": 256`）。
 
 ---
 

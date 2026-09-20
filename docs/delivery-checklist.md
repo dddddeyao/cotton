@@ -40,7 +40,7 @@
 | # | 检查项 | 通过标准 | 结果 |
 |---|---|---|---|
 | 1 | 后端健康检查 | 手机浏览器访问 `http://<电脑IP>:8088/health` 返回 `{"code":200,...,"status":"ok"}` | ☐ |
-| 2 | 模型服务 | **Linux（默认）**：`docker compose ps` 中 `model-service` 为 healthy；**有 GPU** 时电脑上 `curl http://127.0.0.1:5000/health` 也正常（**无 GPU 的 CPU 回退模式不映射 5000 端口**，只看 healthy 即可，属正常现象）<br>**Windows（备用）**：`model-service` 不在容器里（conda 原生进程），改看计划任务 `CottonRecognition_ModelService` 是否在运行 + `curl` 正常 | ☐ |
+| 2 | 模型服务 | **Linux（默认）**：`docker compose ps` 中 `model-service` 为 healthy；**有 GPU** 时电脑上 `curl http://127.0.0.1:5000/health` 也正常（**无 GPU 的 CPU 回退模式不映射 5000 端口**，只看 healthy 即可，属正常现象）。**两种模式都要**确认 `docker exec` 或容器日志里的版本一致：`sudo docker compose exec model-service python -c "import model_service2 as m;print(m.COLOR_RESIZE_SIZE, m.COLOR_IMG_SIZE)"` 应输出 **`256 224`**（= 与训练一致；若为 320 说明容器还是旧镜像，需 `up -d --build` 重建）<br>**Windows（备用）**：`model-service` 不在容器里（conda 原生进程），改看计划任务 `CottonRecognition_ModelService` 是否在运行 + `curl` 正常，且 `curl http://127.0.0.1:5000/health` 里 **`"colorResize": 256`** | ☐ |
 | 3 | APK 安装 | 手机成功安装 `cotton-recognition.apk`（装过旧版需先卸载） | ☐ |
 | 4 | 服务器地址 | App → 我的 → 系统设置 → 服务器地址 → 填写后「保存并测试连接」成功，或「自动搜索服务器」成功 | ☐ |
 | 5 | 登录 | 使用测试账号登录成功 | ☐ |

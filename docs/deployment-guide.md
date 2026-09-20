@@ -171,6 +171,7 @@ sudo /opt/cotton-recognition-assistant/deploy-lan.sh
 curl http://127.0.0.1:8088/health
 
 # 模型服务健康检查（仅「有 GPU」模式可通，原因见下方说明）
+# 返回里应有 "colorResize": 256 / "colorCrop": 224（颜色级预处理，与训练一致）
 curl http://127.0.0.1:5000/health
 
 # 查看所有容器状态（CPU / GPU 模式都可用）
@@ -186,6 +187,11 @@ docker compose ps
 # 方式 2：进容器内自检（与容器 healthcheck 用的是同一条命令）
 docker compose exec model-service \
   python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=5).read())"
+
+# 方式 3：确认颜色级预处理参数（应为 256 224）
+# 若输出 320 224，说明容器里跑的还是旧代码，需要重建：up -d --build model-service
+docker compose exec model-service \
+  python -c "import model_service2 as m; print(m.COLOR_RESIZE_SIZE, m.COLOR_IMG_SIZE)"
 ```
 
 ### 获取 APK

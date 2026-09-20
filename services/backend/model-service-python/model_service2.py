@@ -681,6 +681,9 @@ def predict():
             "modelInfo": {
                 "colorModel": os.path.basename(COLOR_MODEL_PATH),
                 "colorArch": COLOR_ARCH_NAME,
+                # 颜色分类预处理（必须与训练一致：256 + CenterCrop 224，见 docs/handoff.md 第 20 节）
+                "colorResize": COLOR_RESIZE_SIZE,
+                "colorCrop": COLOR_IMG_SIZE,
                 "cottonModel": os.path.basename(COTTON_UNET_WEIGHTS),
                 "impurityModel": os.path.basename(IMPURITY_UNET_WEIGHTS),
                 "cottonKeepRatio": COTTON_KEEP_RATIO,
@@ -724,6 +727,9 @@ def health():
         "model": "ResNet color + UNet cotton + UNet impurity",
         "colorModel": os.path.basename(COLOR_MODEL_PATH),
         "colorArch": COLOR_ARCH_NAME,
+        # 颜色分类预处理参数：用于部署后远程确认「修复是否生效」（应为 256 / 224）
+        "colorResize": COLOR_RESIZE_SIZE,
+        "colorCrop": COLOR_IMG_SIZE,
         "cottonModel": os.path.basename(COTTON_UNET_WEIGHTS),
         "impurityModel": os.path.basename(IMPURITY_UNET_WEIGHTS),
         "device": DEVICE.type,

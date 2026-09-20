@@ -9,6 +9,14 @@ POST /predict
 
 `/predict` 接收 multipart 文件字段 `file`，默认返回数值结果和识别图像；可通过 `images=0` 或表单字段 `returnImages=false` 关闭图像返回。
 
+`/health` 会返回当前生效的关键参数，便于部署后确认镜像版本是不是最新的：
+
+```text
+colorModel / colorArch / colorResize / colorCrop / cottonModel / impurityModel / device
+```
+
+其中 `colorResize` 必须为 **256**、`colorCrop` 为 **224**（与训练一致；写成 320 会明显掉精度与置信度，见 `docs/handoff.md` 第 20 节）。识别结果里的 `modelInfo` 也带同样字段。
+
 ## 运行
 
 ```bash
