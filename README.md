@@ -25,6 +25,8 @@ cotton-recognition-assistant/
     pre-deployment-checklist.md # 部署前检查清单
     pending-questions.md     # 待确认问题清单
     requirements.md          # Android 端需求文档
+  tools/
+    model/                   # 模型侧只读核对脚本（颜色级预处理是否与训练一致）
   deploy-lan.sh              # Linux 一键部署脚本（目标机默认）
   deploy-lan.ps1             # Windows 一键部署脚本（备用方案）
   undeploy-lan.sh            # Linux 一键卸载 / 恢复原状（共用电脑用）
@@ -81,7 +83,9 @@ fenge_best.pth             # 棉花区域分割
 impurityarea_best.pth      # 杂质区域分割
 ```
 
-兼容说明：如果现有棉花区域分割权重名为等价的 `cottonarea_best.pth`，可重命名为 `fenge_best.pth`，或通过模型服务环境变量 `COTTON_UNET_WEIGHTS` 配置为该文件。
+兼容说明：如果现有棉花区域分割权重名为等价的 `cottonarea_best.pth`，可重命名为 `fenge_best.pth`，或通过模型服务环境变量 `COTTON_UNET_WEIGHTS` 配置为该文件。（2026-09-20 已用 SHA256 确认：作者包里的 `cottonarea_best.pth` 就是本仓库的 `fenge_best.pth`，`best.pth` 就是 `impurityarea_best.pth`，逐字节一致。）
+
+> ⚠️ 颜色级分类的几何预处理**必须与训练一致**：默认 `Resize(256) + CenterCrop(224)`（环境变量 `COLOR_RESIZE_SIZE` 可覆盖）。历史版本曾默认 320，实测会明显掉精度与置信度。改动前请用 `tools/model/verify_color_pipeline.py` 在标注测试集上核对，依据与数据见 `docs/handoff.md` 第 20 节。
 
 识别结果除原始等级和数值外，会返回这些图像字段：
 
