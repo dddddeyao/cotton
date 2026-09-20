@@ -1,28 +1,46 @@
 import React from 'react';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, LayoutChangeEvent, NativeSyntheticEvent, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { colorDetectionTip, colorGradeRows, leafGradeRows, standardParameterRows } from '../data/standardsData';
 import { colors, spacing } from '../theme';
 
-const COLOR_GRADE_CHART_URI = 'https://www.cottoninc.com/wp-content/uploads/2020/01/color-chart.jpg';
-const DEFAULT_COLOR_CHART_ASPECT_RATIO = 1.36;
+// 颜色级参考图（Hunter Lab 等级图）：图源内置在 App 内，不再依赖外网，
+// 现场局域网 / 断网环境同样能打开。图片尺寸 700×802，改动图片时记得同步下面的默认比例。
+const colorGradeChartSource = require('../../assets/reference/color-grade-chart.jpg');
+const DEFAULT_COLOR_CHART_ASPECT_RATIO = 700 / 802;
+
+type ChartImageLoadEvent = NativeSyntheticEvent<{
+  source?: {
+    width?: number;
+    height?: number;
+  };
+}>;
 
 export function StandardsScreen() {
   const [chartImageFailed, setChartImageFailed] = React.useState(false);
   const [chartAspectRatio, setChartAspectRatio] = React.useState(DEFAULT_COLOR_CHART_ASPECT_RATIO);
+  const [chartWidth, setChartWidth] = React.useState(0);
 
-  React.useEffect(() => {
-    Image.getSize(
-      COLOR_GRADE_CHART_URI,
-      (width, height) => {
-        if (width > 0 && height > 0) {
-          setChartAspectRatio(width / height);
-        }
-      },
-      () => {
-        setChartImageFailed(true);
-      },
-    );
+  // 按图片真实尺寸换算显示比例，避免不同机型上被拉伸变形
+  const handleChartLoaded = React.useCallback((event: ChartImageLoadEvent) => {
+    const width = event.nativeEvent.source?.width ?? 0;
+    const height = event.nativeEvent.source?.height ?? 0;
+
+    if (width > 0 && height > 0) {
+      setChartAspectRatio(width / height);
+    }
+  }, []);
+
+  // 参考图不依赖 aspectRatio：先量出卡片里实际可用的宽度，再按图片真实宽高比显式算出高度。
+  // 本 App 的 RN 版本下 <Image> 的 aspectRatio 样式算出来的高度不可靠，图片会被拉伸变形
+  // （新闻页横幅当初也踩过同一个坑，见 NewsScreen.tsx 的横幅高度计算），显式高度在任何机型上都不会变形。
+  const chartHeight = chartWidth > 0 ? Math.round(chartWidth / chartAspectRatio) : 0;
+  const chartSizedStyle = chartHeight > 0 ? { height: chartHeight } : null;
+
+  const handleChartViewportLayout = React.useCallback((event: LayoutChangeEvent) => {
+    const nextWidth = Math.round(event.nativeEvent.layout.width);
+
+    setChartWidth((current) => (Math.abs(current - nextWidth) > 1 ? nextWidth : current));
   }, []);
 
   return (
@@ -48,17 +66,18 @@ export function StandardsScreen() {
         <Text style={styles.subheading}>颜色级参考图</Text>
       </View>
       <View style={styles.referenceImageFrame}>
-        <View style={styles.referenceViewport}>
+        <View style={styles.referenceViewport} onLayout={handleChartViewportLayout}>
           {chartImageFailed ? (
-            <View style={styles.referenceImageFallback}>
+            <View style={[styles.referenceImageFallback, chartSizedStyle]}>
               <Text style={styles.referenceImageFallbackTitle}>颜色级参考图加载失败</Text>
-              <Text style={styles.referenceImageFallbackText}>等待替换为本地图源，不使用临时示意图。</Text>
+              <Text style={styles.referenceImageFallbackText}>参考图已内置在 App 内，出现此提示说明安装包资源异常，请重新安装 App。</Text>
             </View>
           ) : (
             <Image
-              source={{ uri: COLOR_GRADE_CHART_URI }}
-              style={[styles.referenceImage, { aspectRatio: chartAspectRatio }]}
+              source={colorGradeChartSource}
+              style={[styles.referenceImage, chartSizedStyle]}
               resizeMode="contain"
+              onLoad={handleChartLoaded}
               onError={() => setChartImageFailed(true)}
             />
           )}
@@ -315,7 +334,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   referenceImageFallback: {
-    aspectRatio: 1.36,
+    minHeight: 120,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 18,

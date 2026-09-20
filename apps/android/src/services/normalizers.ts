@@ -1,4 +1,4 @@
-import { appConfig } from '../config';
+import { getApiBaseUrl } from '../config';
 import { DetectionResult, NewsItem, RecognitionMetric, RecognitionResult, UserProfile, UserSession } from '../types';
 import { hasRealNewsImage } from './newsImages';
 import { filterCottonCustomsNews } from './newsPolicy';
@@ -73,15 +73,16 @@ function resolveImageUri(value: string) {
     return value;
   }
 
+  // 必须使用「运行时」地址：通用版 APK 编译期地址为空，用户在 App 内填写的地址才是真实服务器
+  const baseUrl = getApiBaseUrl();
+
   if (value.startsWith('/')) {
-    const baseUrl = appConfig.apiBaseUrl;
     if (!baseUrl || value === baseUrl || value.startsWith(`${baseUrl}/`)) {
       return value;
     }
     return `${baseUrl}${value}`;
   }
 
-  const baseUrl = appConfig.apiBaseUrl;
   if (!baseUrl) {
     return value;
   }
@@ -260,7 +261,10 @@ export function normalizeRecognitionResult(
   const grade = stringValue(raw.grade ?? raw.level ?? raw.resultText, [colorGrade, impurityGrade].filter(Boolean).join(' / '));
   const createdAt = stringValue(pickField(raw, 'createdAt', 'created_at', 'time', 'recognitionTime', 'timestamp'));
   const timestamp = stringValue(raw.timestamp, createdAt);
-  const resolvedImageUri = resolveImageUri(stringValue(pickField(raw, 'imageUri', 'image_uri', 'imageUrl', 'url'), imageUri));
+  const backendImageUri = stringValue(pickField(raw, 'imageUri', 'image_uri', 'imageUrl', 'url'));
+  // 刚检测完成的记录优先展示手机本地原图（正是用户拍摄/选择的那张），不依赖服务器静态文件下载；
+  // 历史记录没有本地图片时会自动回落到服务器地址。
+  const resolvedImageUri = resolveImageUri(imageUri || backendImageUri);
 
   return {
     id: stringValue(pickField(raw, 'id', 'recordId', 'record_id'), timestamp || resolvedImageUri),

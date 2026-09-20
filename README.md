@@ -15,18 +15,22 @@ cotton-recognition-assistant/
   assets/
     references/              # 鸿蒙端截图、设计参考图
   docs/
-    deployment-guide.md      # 局域网部署与使用手册（Windows / Linux，面向交付）
+    deployment-guide.md      # 局域网部署与使用手册（默认 Linux，备用 Windows，面向交付）
+    delivery-checklist.md    # 交付清单与现场验收清单（一页纸）
     deployment.md            # 服务器 / 公网 Docker 部署说明
     development.md           # 本地开发说明
+    handoff.md               # 项目交接与开发进度说明
+    on-site-quickcard.md     # 现场部署速查卡（一页纸，给非开发人员）
+    local-testing-guide.md   # 本机联调与模拟器测试指南
     pre-deployment-checklist.md # 部署前检查清单
     pending-questions.md     # 待确认问题清单
     requirements.md          # Android 端需求文档
-  deploy-lan.ps1             # Windows 一键部署脚本
-  deploy-lan.sh              # Linux 一键部署脚本
+  deploy-lan.sh              # Linux 一键部署脚本（目标机默认）
+  deploy-lan.ps1             # Windows 一键部署脚本（备用方案）
   undeploy-lan.sh            # Linux 一键卸载 / 恢复原状（共用电脑用）
   build-apk-lan.ps1          # 按局域网 IP 构建 APK
-  docker-compose.yml         # Windows / 通用 Compose
-  docker-compose.linux.yml   # Linux Compose（可选 GPU 加速）
+  docker-compose.yml         # 通用 Compose（Windows 备用方案直接用）
+  docker-compose.linux.yml   # Linux 覆盖文件（默认目标机用，可选 GPU 加速）
 ```
 
 ## 子项目
@@ -102,6 +106,15 @@ cd apps/android && npm run typecheck
 cd services/backend && ./mvnw test
 ```
 
+## 出包（Android APK）
+
+```powershell
+.\build-apk-lan.ps1              # 通用版（推荐）：cotton-recognition.apk，地址在 App 内配置
+.\build-apk-lan.ps1 -LanIP <IP>  # 专用版：cotton-recognition-<IP>.apk，开箱即用
+```
+
+Release 签名依次从 `apps/android/android/keystore.properties`（不提交）或 `COTTON_KEYSTORE_FILE` / `COTTON_KEYSTORE_PASSWORD` / `COTTON_KEY_ALIAS` / `COTTON_KEY_PASSWORD` 环境变量读取；两者都没有时回退到 debug 签名，仅用于本地调试。
+
 ## 部署
 
 仓库已提供单机 Docker Compose 部署配置：
@@ -111,7 +124,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-默认部署后暴露后端 API，Android 端直接配置后端地址：
+默认部署后暴露后端 API，Android 端**在 App 内配置后端地址**（我的 → 系统设置 → 服务器地址），也可以直接点「自动搜索服务器」在局域网内自动发现。地址格式：
 
 ```text
 http://服务器IP:8088
@@ -129,7 +142,7 @@ http://服务器IP:8088/health
 docs/deployment-guide.md
 ```
 
-Windows 可用 `deploy-lan.ps1`，Linux 可用 `deploy-lan.sh` 一键完成部署、防火墙与开机自启配置。
+目标部署机默认 **Linux**，用 `deploy-lan.sh` 一键完成部署、防火墙与开机自启配置；若现场只有 Windows 电脑，才用备用方案 `deploy-lan.ps1`。
 
 ## 当前核心结论
 
@@ -138,7 +151,9 @@ Windows 可用 `deploy-lan.ps1`，Linux 可用 `deploy-lan.sh` 一键完成部�
 - 页面结构：前沿瞭望 / 分类标准 / 智能识别 / 我的信息
 - 登录方式：账号密码 + JWT
 - 分类标准：前端结构化写死，可离线查看
-- 新闻：优先显示缓存，随后通过后端接口刷新；后端不可用时不生成本地替代新闻
+- 新闻：数据内置在 App 内（`src/data/newsData.ts`）并随安装包发布，离线可看；不请求后端接口
+- 服务器地址：可在 App 内配置（含连接测试与局域网自动搜索），换电脑或换 IP 都无需重新打包
+- 安装包：通用版 `cotton-recognition.apk`，Release 使用正式 keystore 签名（签名材料不入库）
 - 智能识别：拍照或相册选择图片，上传后由后端转发模型服务识别；当前流程包含颜色识别、棉花区域分割和杂质区域分割
 
 ## 维护约定

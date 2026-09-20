@@ -93,7 +93,12 @@ def parse_int_labels(raw: str) -> list[int]:
 
 
 COLOR_MODEL_PATH = resolve_model_path("COLOR_MODEL_PATH", "fourtime-best.pth")
-COLOR_RESIZE_SIZE = env_int("COLOR_RESIZE_SIZE", 320)
+# 颜色分类的几何预处理必须与训练/原作者评估脚本完全一致：
+#   原作者脚本 mypredict_cbam.py 用的是 Resize(256) + CenterCrop(224)（ImageNet 标准做法）。
+# 早期版本默认写成 320（短边 320 → 中心裁 224，等于比训练时多放大 25%），
+# 实测会让作者 75 张标注测试集上的预测一致率从 71/75 掉到 60/75、中位置信度从 0.797 掉到 0.603。
+# 详见 docs/handoff.md 第 20 节；如需临时改回，设置环境变量 COLOR_RESIZE_SIZE=320 即可。
+COLOR_RESIZE_SIZE = env_int("COLOR_RESIZE_SIZE", 256)
 COLOR_IMG_SIZE = env_int("COLOR_IMG_SIZE", 224)
 # 颜色等级代码与 App「分类标准」页的颜色等级参数表一致（一级11 ~ 七级71）。
 COLOR_GRADE_LABELS = parse_int_labels(os.getenv("COLOR_GRADE_LABELS", "11,21,31,41,51,61,71"))

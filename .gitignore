@@ -63,6 +63,12 @@ datasets/
 *.apk
 *.aab
 
+# ===== Android 签名材料（绝不提交） =====
+*.keystore
+*.jks
+keystore.properties
+release-signing.properties
+
 # ===== 开发 / 预览 / 发布临时产物（不提交） =====
 preview-checks/
 releases/

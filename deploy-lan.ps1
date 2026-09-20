@@ -381,26 +381,33 @@ if (-not $modelOk) {
 }
 
 # ──────────────────────────────────────────────
-# 10. 构建 Release APK
+# 10. 准备手机端 APK（默认使用通用版，不再默认重新打包）
 # ──────────────────────────────────────────────
-Write-Step "构建 Release APK..."
-# 复用独立的 build-apk-lan.ps1，避免在此重复维护一套构建逻辑
+Write-Step "准备手机端 APK..."
+$universalApk = Join-Path $projectRoot "cotton-recognition.apk"
 $apkBuildScript = Join-Path $projectRoot "build-apk-lan.ps1"
+
+if (Test-Path $universalApk) {
+  Write-OK "已找到通用版 APK: $universalApk"
+  Write-Host "    通用版可在 App 内填写 / 自动搜索服务器地址，换电脑也无需重新打包，推荐直接分发给手机。" -ForegroundColor Gray
+} else {
+  Write-Warn "未找到通用版 APK（cotton-recognition.apk）"
+  Write-Host "    如需通用版，请在装有 Android SDK 的机器上执行: .\build-apk-lan.ps1" -ForegroundColor Gray
+}
 
 if (-not (Test-Path $apkBuildScript)) {
   Write-Warn "未找到 build-apk-lan.ps1，跳过 APK 构建"
 } else {
-  Write-Host "    准备构建 APK，这将需要 3-8 分钟..." -ForegroundColor Gray
-  $choice = Read-Host "    是否立即构建 APK？[Y/n]"
-  if ($choice -eq 'n' -or $choice -eq 'N') {
-    Write-Warn "跳过 APK 构建。稍后可运行: .\build-apk-lan.ps1 -LanIP $lanIP -Port $backendPort"
-  } else {
+  $choice = Read-Host "    是否按本机 IP ($lanIP) 额外构建专用 APK？（需 Android SDK，3-8 分钟）[y/N]"
+  if ($choice -eq 'y' -or $choice -eq 'Y') {
     try {
       & $apkBuildScript -LanIP $lanIP -Port $backendPort
     } catch {
       Write-Err "APK 构建脚本执行失败: $_"
       $script:ExitCode = 1
     }
+  } else {
+    Write-OK "跳过 APK 构建（直接使用现成 APK）"
   }
 }
 
@@ -422,10 +429,14 @@ Write-Host ""
 Write-Host "  手机端配置:" -ForegroundColor Yellow
 Write-Host "    1. 手机连接与电脑同一个 WiFi" -ForegroundColor White
 Write-Host "    2. 用浏览器打开 http://$lanIP`:$backendPort/health 确认可访问" -ForegroundColor White
-Write-Host "    3. 安装 APK 后即可使用" -ForegroundColor White
+Write-Host "    3. 安装 APK：通用版 cotton-recognition.apk" -ForegroundColor White
+Write-Host "    4. 首次打开 App → 设置 → 服务器地址，填: http://$lanIP`:$backendPort" -ForegroundColor White
+Write-Host "       （或点「自动搜索服务器」，无需知道 IP）" -ForegroundColor White
 Write-Host ""
-Write-Host "  如果需要重新构建 APK（IP 变动后）:" -ForegroundColor White
-Write-Host "    .\build-apk-lan.ps1" -ForegroundColor Cyan
+Write-Host "  换电脑 / IP 变动后:" -ForegroundColor White
+Write-Host "    使用通用版 APK 时，只需在 App 内重新填写或自动搜索一次地址即可，无需重新打包" -ForegroundColor White
+Write-Host "    需要按当前 IP 重新出包时才执行:" -ForegroundColor White
+Write-Host "    .\build-apk-lan.ps1 -LanIP $lanIP -Port $backendPort" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  开机自启说明:" -ForegroundColor White
 Write-Host "    - Docker Desktop 会在您登录时自动启动" -ForegroundColor White

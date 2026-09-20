@@ -39,6 +39,8 @@ impurityarea_best.pth      # 杂质区域分割
 ```text
 COLOR_MODEL_PATH
 COLOR_GRADE_LABELS
+COLOR_RESIZE_SIZE       # 默认 256，必须与训练/原作者评估脚本一致（改成 320 会明显掉精度，见 docs/handoff.md 第 20 节）
+COLOR_IMG_SIZE          # 默认 224
 COTTON_UNET_WEIGHTS
 IMPURITY_UNET_WEIGHTS
 COTTON_IMG_SIZE

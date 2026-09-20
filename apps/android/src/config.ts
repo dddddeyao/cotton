@@ -47,4 +47,21 @@ export const appConfig = {
   successCodes: [0, 200],
 };
 
+// ── 运行时可覆盖的后端地址 ──
+// appConfig.apiBaseUrl 是编译期默认值（EXPO_PUBLIC_API_BASE_URL）；
+// 用户在 App 内填写的地址保存在本地，启动时覆盖默认值，从而无需重新打包。
+let runtimeApiBaseUrl = '';
+
+export function setRuntimeApiBaseUrl(url: string) {
+  runtimeApiBaseUrl = trimTrailingSlash(url);
+}
+
+export function getApiBaseUrl(): string {
+  return runtimeApiBaseUrl || appConfig.apiBaseUrl;
+}
+
+export function getDefaultApiBaseUrl(): string {
+  return appConfig.apiBaseUrl;
+}
+
 

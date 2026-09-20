@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   BackHandler,
@@ -20,9 +20,11 @@ import { RecognitionHistoryScreen } from './src/screens/RecognitionHistoryScreen
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { EditProfileScreen } from './src/screens/EditProfileScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { ServerSetupScreen } from './src/screens/ServerSetupScreen';
 import { SimplePage } from './src/screens/SimplePage';
 import { LaunchScreen } from './src/screens/LaunchScreen';
-import { appConfig } from './src/config';
+import { appConfig, getApiBaseUrl, getDefaultApiBaseUrl, setRuntimeApiBaseUrl } from './src/config';
+import { getStoredServerUrl } from './src/services/serverConfig';
 import { cottonNews } from './src/data/newsData';
 import { api } from './src/services/api';
 import { cache } from './src/storage/cache';
@@ -72,6 +74,14 @@ export default function App() {
 
     async function bootstrap() {
       try {
+        // 服务器地址：优先使用用户在 App 内保存的，其次使用打包时的默认值
+        const storedServerUrl = await getStoredServerUrl();
+        const initialServerUrl = storedServerUrl || getDefaultApiBaseUrl();
+
+        if (initialServerUrl) {
+          setRuntimeApiBaseUrl(initialServerUrl);
+        }
+
         const cachedSession = await cache.getSession();
         const cachedHistory = await cache.getHistory(cachedSession?.username);
 
@@ -83,7 +93,18 @@ export default function App() {
           setHistory(cachedHistory);
         }
 
+        sessionUserRef.current = cachedSession?.username ?? null;
         setSession(cachedSession);
+
+        // 启动时如果已登录，用服务器数据刷新该账号的检测记录（先显示本地缓存，服务器结果到达后覆盖）
+        if (cachedSession?.token) {
+          void syncRemoteHistory(cachedSession);
+        }
+
+        // 首次启动且没有任何可用地址时，直接引导用户去填写
+        if (!initialServerUrl) {
+          setView({ name: 'serverSetup' });
+        }
       } finally {
         if (isMounted) {
           setIsBootstrapped(true);
@@ -98,6 +119,31 @@ export default function App() {
     };
   }, []);
 
+  // 当前登录账号名：服务器历史是异步返回的，用它校验结果是否仍属于当前账号，避免切换账号时把 A 的记录写到 B 名下
+  const sessionUserRef = useRef<string | null>(null);
+
+  // 从服务器拉取「当前账号」的检测记录。
+  // 登录、注册、启动时都会调用：重新登录或换设备后仍能看到该账号过去的检测记录；
+  // 服务器不可用或未配置历史接口时静默失败，继续展示手机本地缓存的记录。
+  const syncRemoteHistory = useCallback(async (target: UserSession) => {
+    if (!target?.token) {
+      return;
+    }
+
+    try {
+      const remoteHistory = await api.fetchHistory(target.token);
+
+      if (sessionUserRef.current !== target.username) {
+        return;
+      }
+
+      setHistory(remoteHistory);
+      void cache.setHistory(remoteHistory, target.username);
+    } catch {
+      // 静默失败：保留本地记录，不打断用户操作
+    }
+  }, []);
+
   const saveHistory = useCallback((items: RecognitionResult[], owner = session?.username ?? null) => {
     setHistory(items);
     void cache.setHistory(items, owner);
@@ -106,8 +152,20 @@ export default function App() {
   const handleSessionChange = useCallback((nextSession: UserSession) => {
     setSession(nextSession);
     void cache.setSession(nextSession);
-    void cache.getHistory(nextSession.username).then(setHistory);
-  }, []);
+    // 切换账号：先清空上一位账号的记录视图，再载入目标账号的数据，保证不同账号互不可见
+    sessionUserRef.current = nextSession.username;
+    setHistory([]);
+    void cache.getHistory(nextSession.username).then((localHistory) => {
+      if (sessionUserRef.current !== nextSession.username) {
+        return;
+      }
+
+      // 本地缓存只作为先用先显示的兜底；服务器结果到达后会整体覆盖，所以这里仅在列表仍为空时填充
+      setHistory((current) => (current.length > 0 ? current : localHistory));
+    });
+    // 登录 / 注册成功后立刻同步该账号过去的检测记录
+    void syncRemoteHistory(nextSession);
+  }, [syncRemoteHistory]);
 
   const openTabs = useCallback(() => {
     setView({ name: 'tabs' });
@@ -154,6 +212,7 @@ export default function App() {
       await api.logout(session.token);
       await cache.clearSession();
       setSession(null);
+      sessionUserRef.current = null;
       setHistory([]);
       setActiveTab('profile');
       openTabs();
@@ -231,7 +290,7 @@ export default function App() {
         '检测失败',
         [
           getErrorMessage(error),
-          `接口：${appConfig.apiBaseUrl}${appConfig.endpoints.recognition}`,
+          `接口：${getApiBaseUrl()}${appConfig.endpoints.recognition}`,
           `图片来源：${imageUriScheme(selectedImageUri)}`,
           `登录状态：${session?.token ? '已登录' : '未登录'}`,
         ].join('\n'),
@@ -292,11 +351,21 @@ export default function App() {
     }
 
 
+    if (view.name === 'serverSetup') {
+      return (
+        <ServerSetupScreen
+          onBack={() => setView({ name: 'settings' })}
+          onSaved={() => setView({ name: 'settings' })}
+        />
+      );
+    }
+
     if (view.name === 'settings') {
       return (
         <SettingsScreen
           session={session}
           onBack={openTabs}
+          onOpenServerSetup={() => setView({ name: 'serverSetup' })}
           onClearCache={async () => {
             await cache.clearRuntimeData(session?.username);
             setHistory([]);
@@ -311,8 +380,54 @@ export default function App() {
     if (view.name === 'agreement') {
       const body =
         view.kind === 'user'
-          ? '本系统用于棉花图像样本的颜色级、叶屑等级与相关指标展示，检测结果应结合分类标准与人工复核使用。用户应妥善保管账号信息，并遵守项目数据使用要求。'
-          : '应用会在本地缓存新闻、检测记录和登录会话。配置后端后，图片会通过检测接口上传，认证信息以 Authorization Bearer Token 形式发送。应用仅保存完成展示和账号功能所需的数据。';
+          ? `欢迎使用「棉花识别助手」。本协议说明您在使用本应用时的权利与义务，请在开始使用前仔细阅读。
+
+一、服务内容
+1. 本应用为棉花样本检测辅助工具，提供图像采集、颜色级与杂质等级识别、检测记录管理、行业资讯浏览等功能。
+2. 识别结果由算法模型给出，仅作为辅助参考，不能替代人工检验、实验室检测或主管部门的最终判定结论。
+
+二、账号与安全
+1. 请使用管理员分配的账号登录，或按提示自行注册账号。
+2. 请妥善保管账号与密码，因账号信息泄露造成的损失由使用方自行承担。
+3. 发现账号异常时，请立即联系管理员或拨打客服电话。
+
+三、使用规范
+1. 请勿上传与本业务无关的图片，或含有违法违规内容的图片。
+2. 请勿对本应用进行反向工程、破解，或用于未授权用途。
+3. 请勿以任何方式干扰服务器与网络的正常运行。
+
+四、知识产权
+本应用及其相关文档、界面设计与模型算法的权利归开发方所有。
+
+五、服务变更与免责
+服务内容可能因部署环境、网络状况或业务调整发生变更。因不可抗力、网络中断、设备故障导致的服务中断，开发方不承担由此产生的间接损失。
+
+六、其他
+继续使用本应用，即表示您已阅读并同意本协议。`
+          : `我们重视您的个人信息保护。本政策说明本应用会处理哪些信息、如何使用以及如何保护。
+
+一、收集的信息
+1. 账号信息：登录或注册时填写的用户名与密码，用于身份校验。
+2. 检测图片：您通过拍照或相册选择的棉花样本图片，用于上传至识别服务并生成检测结果。
+3. 检测记录：识别时间与识别结果等，用于在「检测记录」中回看与删除。
+
+二、信息的使用
+1. 检测图片仅用于本次识别处理与结果展示，不用于其他用途。
+2. 检测记录保存在部署本应用的本地服务器（局域网内），不会上传至互联网。
+3. 行业资讯内容随应用一并提供，浏览资讯不会上传任何个人信息。
+
+三、信息的存储
+1. 登录状态与临时检测记录会缓存在手机本地，您可在「应用设置 → 清理缓存」中清除。
+2. 服务器端数据保存在部署单位的服务器中，由部署单位负责管理。
+
+四、信息共享
+除法律法规要求或主管部门依法查询外，我们不会向任何第三方提供您的信息。
+
+五、权限说明
+应用会申请相机与相册（读取图片）权限，仅用于拍摄或选择待检测的棉花样本图片。
+
+六、联系我们
+如对本政策有疑问，可通过应用内公示的客服电话与我们联系。`;
 
       return (
         <SimplePage
