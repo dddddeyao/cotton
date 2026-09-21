@@ -767,4 +767,39 @@ COLOR_RESIZE_SIZE = env_int("COLOR_RESIZE_SIZE", 320)   # ← 短边 320，比�
 
 ---
 
+## 21. 首次启动自动搜索服务器 + 失败自动重试（2026-09-21）
+
+**需求**：现场部署后用户第一次打开 App 需要自己填 IP 或点「自动搜索服务器」；改为**首次打开即自动扫描**，全程不出现输入框（手填入口暂按现状保留，隐藏方案待后续需求）。
+
+**改动（仅 App 端；后端、模型服务、识别链路一行未动）**
+
+| 文件 | 改动 |
+|---|---|
+| `apps/android/src/screens/ServerBootstrapScreen.tsx`（新增） | 自动扫描页：扫描中显示 logo + 进度文案；失败时显示三条排查提示 + 「重新搜索」「手动填写地址」两个按钮，并按 8s → 15s → 30s → 60s（封顶）自动重试 |
+| `apps/android/App.tsx` | 启动时若「App 内无保存地址**且**编译期 `EXPO_PUBLIC_API_BASE_URL` 为空」→ 进入 `serverScan` 视图（原来直接跳 `serverSetup`）；`serverSetup` 增加来源标记，从扫描页进入时「返回/保存」回到主界面，从设置页进入时回设置页 |
+| `apps/android/src/types.ts` | `AppView` 新增 `{ name: 'serverScan' }`；`serverSetup` 增加 `from?: 'settings' \| 'scan'` |
+| 未改 | `ServerSetupScreen`（手填 + 测试连接）保持原样 |
+
+**行为细节**
+- 扫描复用既有 `discoverServer()`：取手机 IP → 扫本网段（+ `192.168.1.x`/`192.168.0.x` 兜底）、并发 48、单次超时 1.2s；
+- 找到即 `saveServerUrl()` + `setRuntimeApiBaseUrl()` 并直接进入应用；存储 key 与手动保存一致（`cotton.server.baseUrl`），因此**第二次启动不再扫描**；
+- 定时器在卸载时清理；`onConnected` 用 ref 持有，避免父组件重渲染导致重复扫描；
+- **预置 IP 的专用包行为不变**：编译期地址非空 → 不会进入扫描页。
+
+**验证状态**
+- ✅ `npm run typecheck` 通过（exit 0）
+- ✅ Release 构建成功（`BUILD SUCCESSFUL in 1m 51s`），产物 `cotton-recognition.apk` = 73,550,148 字节 / 2026-09-21 11:05:08，`apksigner verify --print-certs` → `CN=Cotton Recognition Assistant, OU=Delivery, O=Cotton Recognition, L=Hangzhou, ST=Zhejiang, C=CN`（正式证书、V2 签名）
+- ⏳ **未在设备上人工验证**（需清空应用数据才看得到首次流程）：
+
+  ```powershell
+  adb shell pm clear com.customs.cottonrecognition   # 会一并清掉登录态与已保存的服务器地址
+  adb install -r cotton-recognition.apk
+  ```
+
+  预期：启动页结束后出现「正在连接服务器…」；局域网内有后端时自动连上并进入主界面；没有后端时显示「未找到服务器」并按 8/15/30/60 秒自动重试。
+
+**注意事项（本次实测遇到）**：`build-apk-lan.ps1` 的 Gradle 阶段成功，但脚本收尾的「拷贝到根目录 + 签名校验」没有出现在日志里（PowerShell 重定向缓冲/进程疑似卡住，进程仍在）。本次已手工 `Copy-Item` + `apksigner verify` 完成收尾，结果与脚本预期一致；下次若遇到同样情况，照此手工补齐即可。
+
+---
+
 *本文档由当前开发会话整理，未验证的内容均已标注。*

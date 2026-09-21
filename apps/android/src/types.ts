@@ -72,5 +72,6 @@ export type AppView =
   | { name: 'recognitionHistory' }
   | { name: 'editProfile' }
   | { name: 'settings' }
-  | { name: 'serverSetup' }
+  | { name: 'serverScan' }
+  | { name: 'serverSetup'; from?: 'settings' | 'scan' }
   | { name: 'agreement'; kind: 'user' | 'privacy' };

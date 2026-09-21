@@ -20,6 +20,7 @@ import { RecognitionHistoryScreen } from './src/screens/RecognitionHistoryScreen
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { EditProfileScreen } from './src/screens/EditProfileScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { ServerBootstrapScreen } from './src/screens/ServerBootstrapScreen';
 import { ServerSetupScreen } from './src/screens/ServerSetupScreen';
 import { SimplePage } from './src/screens/SimplePage';
 import { LaunchScreen } from './src/screens/LaunchScreen';
@@ -101,9 +102,9 @@ export default function App() {
           void syncRemoteHistory(cachedSession);
         }
 
-        // 首次启动且没有任何可用地址时，直接引导用户去填写
+        // 首次启动且没有任何可用地址时：进入自动搜索页，由 ServerBootstrapScreen 自动发现并保存服务器
         if (!initialServerUrl) {
-          setView({ name: 'serverSetup' });
+          setView({ name: 'serverScan' });
         }
       } finally {
         if (isMounted) {
@@ -351,11 +352,23 @@ export default function App() {
     }
 
 
+    if (view.name === 'serverScan') {
+      return (
+        <ServerBootstrapScreen
+          onConnected={() => setView({ name: 'tabs' })}
+          onManualSetup={() => setView({ name: 'serverSetup', from: 'scan' })}
+        />
+      );
+    }
+
     if (view.name === 'serverSetup') {
+      // 从自动搜索页进来的：返回/保存后回主界面；从设置页进来的：回设置页
+      const serverSetupBack: AppView = view.from === 'scan' ? { name: 'tabs' } : { name: 'settings' };
+
       return (
         <ServerSetupScreen
-          onBack={() => setView({ name: 'settings' })}
-          onSaved={() => setView({ name: 'settings' })}
+          onBack={() => setView(serverSetupBack)}
+          onSaved={() => setView(serverSetupBack)}
         />
       );
     }
@@ -365,7 +378,7 @@ export default function App() {
         <SettingsScreen
           session={session}
           onBack={openTabs}
-          onOpenServerSetup={() => setView({ name: 'serverSetup' })}
+          onOpenServerSetup={() => setView({ name: 'serverSetup', from: 'settings' })}
           onClearCache={async () => {
             await cache.clearRuntimeData(session?.username);
             setHistory([]);

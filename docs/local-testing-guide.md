@@ -141,7 +141,15 @@ cd e:\my-react-workspace\cotton-recognition-assistant
 # & 'E:\Android\platform-tools\adb.exe' uninstall com.customs.cottonrecognition
 ```
 
-然后在 App 内配置服务器地址：
+**首次打开会自动搜索服务器**（App 内还没保存过地址时）：启动页结束后显示「正在连接服务器…」，找到即自动保存并进入主界面，**不需要手填 IP**；没找到则显示「未找到服务器」，按 **8/15/30/60 秒自动重试**，也可点「重新搜索」；要手动指定就点「手动填写地址」，或走下面第 1~2 步。
+
+要在模拟器/真机上**复现首次流程**（会清掉已保存地址与登录态）：
+
+```powershell
+adb shell pm clear com.customs.cottonrecognition
+```
+
+也可以在 App 内手动配置服务器地址：
 
 1. 底部 **我的** → **系统设置** → **服务器地址**
 2. 填写服务器地址 → 点「保存并测试连接」
